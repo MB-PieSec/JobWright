@@ -23,7 +23,7 @@ Nothing is scored, tracked, or applied to yet — this version proves the extrac
 ## Setup
 
 ```bash
-git clone https://github.com/<your-username>/jobwright.git
+git clone https://github.com/MB-PieSec/jobwright.git
 cd jobwright
 npm install
 ```
