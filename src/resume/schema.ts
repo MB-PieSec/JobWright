@@ -15,7 +15,7 @@ export const ResumeProfileSchema = z.object({
       company: z.string(),
       durationMonths: z.number(),
       summary: z.string(),
-                            
+
     })
   ),
 
