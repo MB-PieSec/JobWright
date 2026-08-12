@@ -34,8 +34,6 @@ Create a `.env` file in the project root with your OpenRouter API key:
 OPENROUTER_API_KEY=your_key_here
 ```
 
-This file is git-ignored — never commit your API key.
-
 ## Usage
 
 ```bash
