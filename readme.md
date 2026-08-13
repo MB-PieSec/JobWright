@@ -82,7 +82,7 @@ Both flags accept `--flag=value` or `--flag value` form.
 | Flag | Default | Description |
 |---|---|---|
 | `--reasoning-length` | `200` | Target character length for each job's scoring reasoning |
-| `--min-score` | `70` | Score threshold — jobs below this aren't printed to the console (they're still saved to `jobs.json`) |
+| `--min-score` | `70` | Score threshold — jobs below this are logged as "Ignored" instead of showing their score (they're still saved to `jobs.json` either way) |
 
 ## Resume format
 
@@ -105,7 +105,7 @@ Scoring quality depends heavily on the model you configure in `llm/client.ts`. T
 - No PDF/DOCX support yet.
 - Jobinja search query and platform selection are currently hardcoded in `src/cli/index.ts` — not yet configurable via CLI args or config file.
 - No hard filters (location, salary, experience range) are applied before scoring yet — every scraped job is scored, even obvious mismatches. Planned for a later version.
-- `--min-score` currently only affects what's printed to the console — every scored job is still saved to `jobs.json` regardless of score. Filtering-for-storage/apply-eligibility is planned for a later version.
+- `--min-score` currently only affects console output (jobs below it are logged as "Ignored" rather than showing a score) — every scored job is still saved to `jobs.json` regardless of score. Filtering-for-storage/apply-eligibility is planned for a later version.
 - No scoring result caching or fuzzy skill matching — scoring is a fresh LLM call per job every run.
 - No auto-apply or application tracking yet — that's coming in later versions.
 - Jobinja scraping depends on the site's current DOM structure (via `src/platforms/jobinja/selectors.ts`). If Jobinja changes their page layout, extraction may break until selectors are updated.
@@ -164,6 +164,7 @@ src/
 - `cli/index.ts`: profile is now loaded into memory on **both** paths — parsed fresh when `profile.json` doesn't exist, or read from disk and re-validated against `ResumeProfileSchema` when it does. Previously, the "profile already exists" branch didn't actually load anything into memory.
 - `cli/index.ts`: jobs with a `null` description (failed/partial scrape) are now skipped from scoring instead of causing a type error
 - `cli/index.ts`: every scored job — regardless of score — is now written to `jobs.json` as a flat combined record (job fields + score fields merged). Filtering by score threshold happens only at console-log time for now, not at storage time, since low-scoring jobs may still be useful to review later.
+- `cli/index.ts`: added a running `count/total` progress indicator to the console log for each scored job, and jobs below `--min-score` are now explicitly logged as "Ignored" (with their position in the run) instead of being silently skipped from console output
 - Moved `parser.test.ts` into a top-level `__tests__/` folder
 
 ### V1
