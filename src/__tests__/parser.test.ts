@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeExperienceLevel, stripCodeFences } from "../resume/parser.js";
+import { computeExperienceLevel } from "../resume/parser.js";
+import { stripCodeFences } from "../utils/stripCodeFences.js";
 
 describe("computeExperienceLevel", () => {
   it("sums durationMonths across all roles into years", () => {

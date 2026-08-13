@@ -2,16 +2,27 @@ import { ResumeProfile } from "./schema.js";
 import { ResumeProfileSchema } from "./schema.js";
 import 'dotenv/config';
 import { openRouterWrapper } from "../llm/client.js";
+import { stripCodeFences } from "../utils/stripCodeFences.js";
 
-export function stripCodeFences(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.startsWith("```")) {
-    const withoutOpening = trimmed.slice(trimmed.indexOf("\n") + 1);
-    const withoutClosing = withoutOpening.slice(0, withoutOpening.lastIndexOf("```"));
-    return withoutClosing.trim();
-  }
-  return trimmed;
+function scoreResumePrompt(contents:string): string {
+  return `
+    You are extracting structured data from a resume.
+    Return ONLY valid JSON, no markdown fences, no explanation.
+    Shape required: name (string), skills (string[]),
+    workHistory (array of {title, company, durationMonths, summary})
+  
+    Rules for workHistory:
+    - Group all projects, achievements, and bullet points under the SAME employer/client into a SINGLE workHistory entry.
+    - Do NOT create a separate entry for each project, achievement, or bullet point.
+    - One entry per distinct employer or client only.
+    - Combine multiple achievements for the same employer into one "summary" field, using semicolons or short sentences to separate them.
+    - Only include entries under work experience/employment sections. Do NOT include skills, education, or certifications as work history.
+  
+    Resume:
+    ${contents}
+  `;
 }
+
 
 export function computeExperienceLevel(workHistory: { durationMonths: number }[]) {
   const totalMonths = workHistory.reduce((sum, role) => sum + role.durationMonths, 0);
@@ -27,7 +38,8 @@ export function computeExperienceLevel(workHistory: { durationMonths: number }[]
 }
 
 export async function parseResume(contents: string): Promise<ResumeProfile> {
-  const modelText = await openRouterWrapper(contents);
+  const prompt = scoreResumePrompt(contents)
+  const modelText = await openRouterWrapper(prompt);
   const cleanedJson = stripCodeFences(modelText);
   const parsedJson = JSON.parse(cleanedJson);
   const computed = computeExperienceLevel(parsedJson.workHistory);
