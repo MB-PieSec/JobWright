@@ -3,3 +3,6 @@ profile.json
 .env
 /node_modules
 jobs.json
+jobwright.db
+jobwright.db-wal
+jobwright.db-shm

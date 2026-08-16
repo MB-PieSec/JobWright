@@ -1,6 +1,7 @@
 import { JobPlatform, JobListing, JobPosting } from "../types.js";
 import type { Page } from "puppeteer";
 import { SELECTORS } from "./selectors.js";
+import type { ApplyResult } from "../types.js";
 
 class JobinjaAdapter implements JobPlatform{
   async search(page: Page, query: string): Promise<JobListing[]>{
@@ -41,6 +42,35 @@ class JobinjaAdapter implements JobPlatform{
 
       return { description, infoItems };
     }, SELECTORS);
+  }
+  async apply(page: Page, url: string): Promise<ApplyResult> {
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
+  
+    const alreadyApplied = await page.$(SELECTORS.apply.appliedIndicator);
+    if (alreadyApplied) {
+      return { status: "alreadyApplied" };
+    }
+  
+    const submitButton = await page.$(SELECTORS.apply.applySubmitButton);
+    if (!submitButton) {
+      return { status: "error", reason: "Apply form not found on page" };
+    }
+  
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "networkidle2", timeout: 0 }),
+      submitButton.click(),
+    ]);
+  
+    // explicitly re-fetch the original job URL, rather than trusting
+    // whatever page the click's redirect landed on
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
+  
+    const confirmed = await page.$(SELECTORS.apply.appliedIndicator);
+    if (confirmed) {
+      return { status: "success" };
+    }
+  
+    return { status: "error", reason: "No confirmation appeared after submit" };
   }
 }
 

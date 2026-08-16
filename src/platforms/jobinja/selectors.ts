@@ -9,4 +9,8 @@ export const SELECTORS = {
     infoItemLabel: '.c-infoBox__itemTitle',
     infoItemTags: '.tags span',
   },
+  apply: {
+    appliedIndicator: ".application-innerCard",
+    applySubmitButton: "form.apply-form input[type='submit']"
+  }
 };
