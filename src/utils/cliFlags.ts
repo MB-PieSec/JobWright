@@ -19,3 +19,9 @@ export function getNumericArg(flagName: string, defaultValue: number): number {
 
   return defaultValue;
 }
+
+export function hasFlag(flagName: string): boolean {
+  return process.argv.some(
+    (arg) => arg === `--${flagName}` || arg.startsWith(`--${flagName}=`)
+  );
+}

@@ -19,6 +19,15 @@ export const ResumeProfileSchema = z.object({
     })
   ),
 
+  projects: z
+    .array(
+      z.object({
+        title: z.string(),
+        summary: z.string(),
+      })
+    )
+    .optional(),
+
   education: z.array(
     z.object({
       degree: z.string(),
@@ -27,8 +36,8 @@ export const ResumeProfileSchema = z.object({
     })
   ).optional(),
 
-
-  location: z.string().optional(),
+  city: z.string().optional(),
+  province: z.string().optional(),
 });
 
 export type ResumeProfile = z.infer<typeof ResumeProfileSchema>;
