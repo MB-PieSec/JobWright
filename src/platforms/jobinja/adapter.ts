@@ -1,11 +1,13 @@
 import { JobPlatform, JobListing, JobPosting } from "../types.js";
 import type { Page } from "puppeteer";
-import { SELECTORS } from "./selectors.js";
+import { SELECTORS, parseTotalResultCount } from "./selectors.js";
 import type { ApplyResult } from "../types.js";
 
 class JobinjaAdapter implements JobPlatform{
-  async search(page: Page, query: string): Promise<JobListing[]>{
-    await page.goto(query, { waitUntil: "networkidle2", timeout: 0 });
+  buildSearchQuery(keyword: string): string {
+    return `https://jobinja.ir/jobs?filters%5Bkeywords%5D%5B0%5D=${encodeURIComponent(keyword)}`;
+  }
+  private async scrapeJobItems(page: Page): Promise<JobListing[]> {
     const jobs = await page.$$eval(
       SELECTORS.listing.jobItem,
       (items, selectors) => {
@@ -21,6 +23,41 @@ class JobinjaAdapter implements JobPlatform{
     );
     return jobs.filter((job): job is JobListing => job.url !== null);
   };
+  async search(page: Page, query: string, maxPages: number): Promise<JobListing[]> {
+    await page.goto(query, { waitUntil: "networkidle2", timeout: 0 });
+  
+    const allJobs = await this.scrapeJobItems(page);
+  
+    const countText = await page.$eval(
+      SELECTORS.search.totalResultCount,
+      (el) => el.textContent ?? ''
+    ).catch(() => null);
+  
+    const totalCount = countText ? parseTotalResultCount(countText) : null;
+  
+    if (totalCount === null) {
+      console.warn('Could not determine total result count — scraping page 1 only.');
+      return allJobs;
+    }
+  
+    const perPage = allJobs.length;
+    const totalPages = perPage > 0 ? Math.ceil(totalCount / perPage) : 1;
+    const pagesToFetch = Math.min(totalPages, maxPages);
+  
+    if (totalPages > pagesToFetch) {
+      console.log(
+        `Found ${totalCount} jobs across ~${totalPages} pages. Scraping first ${pagesToFetch} pages (~${pagesToFetch * perPage} jobs) — pass --max-pages to scrape more.`
+      );
+    }
+  
+    for (let pageNum = 2; pageNum <= pagesToFetch; pageNum++) {
+      await page.goto(`${query}&page=${pageNum}`, { waitUntil: "networkidle2", timeout: 0 });
+      const pageJobs = await this.scrapeJobItems(page);
+      allJobs.push(...pageJobs);
+    }
+  
+    return allJobs;
+  }
   async getJobDetails(page: Page, url: string): Promise<JobPosting["details"]> {
     await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
 

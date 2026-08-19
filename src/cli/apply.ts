@@ -1,10 +1,6 @@
-import { readFileContent } from "../utils/readFileContent.js";
-import { fileExists } from "../utils/fileExists.js";
-import { writeFile } from "node:fs/promises";
 import { launchBrowser } from "../platforms/browser.js";
 import { platformRegistry, type PlatformName } from "../platforms/registry.js";
 import { getNumericArg, hasFlag } from "../utils/cliFlags.js";
-import type { ExperienceRequirement } from "../filters/experience.js";
 import { db } from "../db/client.js";
 import { upsertJob } from "../db/upsertJob.js";
 import { mapApplyResultToStatus } from "../utils/mapApplyResultToStatus.js";

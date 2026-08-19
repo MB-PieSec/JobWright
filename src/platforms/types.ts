@@ -19,7 +19,8 @@ export interface JobPosting extends JobListing {
 }
 
 export interface JobPlatform{
-  search(page: Page, query: string): Promise<JobListing[]>;
+  buildSearchQuery(keyword: string): string;
+  search(page: Page, query: string, maxPages: number): Promise<JobListing[]>;
   getJobDetails(page: Page, url: string): Promise<JobPosting["details"]>
   apply(page: Page, url: string): Promise<ApplyResult>;
 }
