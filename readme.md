@@ -2,7 +2,7 @@
 
 A self-hosted, open-source CLI tool that parses your resume, matches it against job postings across multiple platforms, and auto-applies to the ones that fit — built for developers who want a real, ownable alternative to manually scrolling job boards.
 
-**Status: V3 — hard filters, auto-apply, and SQLite application tracking.**
+**Status: V3.5 — hard filters, auto-apply, SQLite application tracking, multi-page search, and configurable search keyword.**
 
 ## What Jobwright does so far
 
@@ -10,7 +10,7 @@ A self-hosted, open-source CLI tool that parses your resume, matches it against 
 2. Sends it to an LLM (via OpenRouter) to extract structured data — name, skills, work history, city/province, and standalone projects
 3. Computes total years of experience and a seniority level from that work history in code (not by the LLM — see note below)
 4. Validates the result against a strict schema and saves it to `profile.json`
-5. Searches Jobinja for job postings matching a query, using a headless browser
+5. Searches Jobinja for job postings matching a configurable keyword (`--keyword`, default `backend`), paging through up to `--max-pages` pages of results (default 3) using a headless browser
 6. Visits each matching posting and extracts its full description and metadata (location, work type, required experience, etc.)
 7. **Applies hard filters before scoring:** an opt-in experience filter and an always-on location filter (see Hard Filters below) — jobs that fail a filter are recorded and skipped, saving an LLM call
 8. Scores each remaining job posting against your resume using an LLM, producing a 0–100 match score, a count of requirements met vs. total, a list of missing requirements, and a short reasoning summary
@@ -110,7 +110,7 @@ npm start
 
 On first run, you'll be prompted for the path to your resume (Markdown only for now). The parsed, validated profile is saved to `profile.json` — on subsequent runs this step is skipped if `profile.json` already exists, and the existing profile is loaded and re-validated instead.
 
-The tool then opens a browser, searches Jobinja for a (currently hardcoded) query, filters, scores each matching job against your resume, and records every job to `jobwright.db`.
+The tool then opens a browser, searches Jobinja for the configured keyword (`--keyword`, default `backend`), fetching up to `--max-pages` pages of results (default `3`) — the console log tells you the total number of matching jobs found and how many pages you're covering, so you know if you're leaving results on the table. It then filters, scores each matching job against your resume, and records every job to `jobwright.db`.
 
 To apply to eligible jobs, run the separate apply step:
 
@@ -128,6 +128,8 @@ All flags accept `--flag=value` or `--flag value` form unless noted otherwise.
 |---|---|---|---|
 | `--reasoning-length` | `200` | `index.ts` | Target character length for each job's scoring reasoning |
 | `--min-score` | `70` | `index.ts`, `apply.ts` | Score threshold — in `index.ts`, jobs below this are logged as "Ignored"; in `apply.ts`, only jobs at or above this are eligible to apply to |
+| `--keyword` | `backend` | `index.ts` | Search keyword sent to Jobinja. Only a single keyword is supported per run (see Known Limitations) |
+| `--max-pages` | `3` | `index.ts` | Maximum number of Jobinja search-result pages to scrape. If the site reports more results than this covers, a console log tells you how many pages/jobs you're missing |
 | `--experience-tolerance` | off (flag absent = no filtering) | `index.ts` | Opt-in experience filter. Presence alone enables it; a value (e.g. `--experience-tolerance=1`) sets the tolerance buffer in years (default `1` if no value given) |
 | `--hard-match` | off (boolean) | `index.ts` | Tightens the location filter from province-level to exact city-level matching |
 | `--skip-filters` | off (boolean) | `index.ts` | Bypasses both the experience and location filters for the run |
@@ -152,12 +154,12 @@ Scoring quality depends heavily on the model you configure in `llm/client.ts`. T
 - Extraction quality depends on the underlying LLM model. Smaller/cheaper models can occasionally misgroup or fragment work history entries — review `profile.json` after running to confirm it looks correct before relying on it downstream.
 - Scoring quality also depends on the underlying LLM model — see Model Recommendations above.
 - No PDF/DOCX support yet.
-- Jobinja search query and platform selection are currently hardcoded in `src/cli/index.ts` — not yet configurable via CLI args or config file.
+- The search keyword is configurable (`--keyword`), but only a single keyword is supported per run — no multi-keyword search in one invocation. This is a deliberate constraint, not a gap: unioning results across multiple keyword searches would multiply LLM scoring calls (and cost) for jobs that may overlap across searches, and would need dedup logic that doesn't exist yet. Platform selection is still hardcoded to Jobinja in `src/cli/index.ts` — not yet configurable.
 - **Filtered-out jobs are recorded with a status but no detail beyond that status** — e.g. a `filtered_experience` row doesn't retain the raw experience string that caused the fail. Full audit detail may be added later if needed.
 - **No status history.** Each job's database row reflects only its latest state — if a job's status changes across runs (e.g. re-scored after a flag change), the previous state isn't retained, only `updated_at` changes.
 - Only Jobinja is supported as a platform so far — the adapter pattern is in place, but no second platform has been implemented yet.
 - Jobinja scraping depends on the site's current DOM structure (via `src/platforms/jobinja/selectors.ts`). If Jobinja changes their page layout, extraction may break until selectors are updated.
-- **Network routing conflict in sanctioned/restricted regions:** OpenRouter may require a VPN/tunnel to reach (returns `403 Forbidden` otherwise), but scraping Jobinja requires a direct, non-tunneled connection. Running both in the same process currently requires manually toggling your network setup between phases — a per-request proxy scoped to the LLM call, or splitting scraping and scoring into two separate run phases, is planned but not yet implemented.
+- **Network routing in sanctioned/restricted regions:** OpenRouter may be unreachable without a VPN/tunnel (returns `403 Forbidden` otherwise), while scraping Jobinja works best with a direct connection. This isn't solved at the application level — Jobwright makes no attempt to switch network paths mid-run. If you're in a similar situation, the practical fix is at your VPN/network layer: configure your VPN client or server to route domestic traffic (e.g. Jobinja) directly while tunneling everything else, so both connections work transparently without the app needing to know the difference.
 - No scoring result caching or fuzzy skill matching — scoring is a fresh LLM call per job every run.
 - Application outcome tracking beyond apply/already-applied/error (interview stages, responses, rejections) is not implemented yet.
 
@@ -183,17 +185,17 @@ src/
 │   ├── client.ts                    # opens jobwright.db, creates jobs table if missing (WAL mode)
 │   └── upsertJob.ts                 # upsertJob() — insert-or-update a job row by URL
 ├── platforms/
-│   ├── types.ts                     # JobListing / JobPosting / JobPlatform contracts (includes apply/ApplyResult)
+│   ├── types.ts                     # JobListing / JobPosting / JobPlatform contracts (includes apply/ApplyResult, buildSearchQuery)
 │   ├── browser.ts                    # shared Puppeteer browser launcher
 │   ├── registry.ts                   # platform name -> adapter lookup
 │   └── jobinja/
-│       ├── adapter.ts                 # implements JobPlatform for Jobinja (search, getJobDetails, apply)
-│       └── selectors.ts               # all Jobinja CSS selectors, centralized (listing, detail, apply)
+│       ├── adapter.ts                 # implements JobPlatform for Jobinja (buildSearchQuery, search, getJobDetails, apply)
+│       └── selectors.ts               # all Jobinja CSS selectors, centralized (listing, detail, apply, search), plus parseTotalResultCount
 └── utils/
     ├── getUserInput.ts
     ├── readFileContent.ts
     ├── fileExists.ts
-    ├── cliFlags.ts                   # getNumericArg(flagName, defaultValue), hasFlag(flagName)
+    ├── cliFlags.ts                   # getNumericArg(flagName, defaultValue), hasFlag(flagName), getStringArg(flagName, defaultValue)
     ├── stripCodeFences.ts            # strips markdown code fences from LLM responses
     ├── normalizePersian.ts           # Persian character-variant + zero-width-char normalization
     └── mapApplyResultToStatus.ts     # ApplyResult status -> database status mapping
@@ -207,10 +209,19 @@ src/
 - ~~V1 — first job platform adapter (Jobinja, read-only)~~ done
 - ~~V2 — resume-to-job scoring engine~~ done
 - ~~V3 — hard filters, auto-apply, SQLite application tracking~~ done
+- ~~V3.5 — multi-page search, configurable search keyword, internal cleanup~~ done
 - V4 — additional platforms (Jobvision.ir) + notifications (Telegram/Discord)
 - V5 — LinkedIn/Indeed support, richer outcome tracking
 
 ## Changelog
+
+### V3.5
+- Added multi-page scraping for Jobinja search results. Total result count is parsed from the page (handles Persian-numeral digits) and logged up front so you know how many jobs a `--max-pages` cap is leaving out; falls back to page-1-only with a warning if the count can't be parsed, rather than crashing.
+- Added `--max-pages` flag (default `3`) to control how many result pages are fetched per run.
+- Added `--keyword` flag (default `backend`) to make the search keyword configurable at runtime, replacing a previously hardcoded query string. Deliberately single-keyword only — see Known Limitations.
+- Moved search-query construction out of `cli/index.ts` and into a new `buildSearchQuery()` method on the `JobPlatform` interface, implemented per-adapter. Keeps `index.ts` platform-agnostic ahead of adding a second platform in V4.
+- Refactored `cli/index.ts`: extracted per-job filter/scoring logic into a `processJob()` function, flag-reading into `readRunFlags()`, and the repeated inter-request delay into a `throttle()` helper. Pure internal cleanup — no behavior change.
+- Fixed a progress-counter bug: skip-branch log lines (`filtered_experience`, `filtered_location`) were hardcoded to show `/20`, correct only when a run was capped at a single page. Now reflects the actual `jobs.length` for the run.
 
 ### V3
 - Added `filters/experience.ts` with a tagged-union `ExperienceRequirement` type (`range`, `atLeast`, `noRequirement`, `fieldAbsent`, `unparseable`) instead of a plain `{min, max}`, so every consumer handles each case explicitly. `noRequirement` and `fieldAbsent` are kept distinct even though they behave identically in the filter, so a future scraper breakage can be told apart from a genuine "doesn't matter" value.

@@ -25,3 +25,15 @@ export function hasFlag(flagName: string): boolean {
     (arg) => arg === `--${flagName}` || arg.startsWith(`--${flagName}=`)
   );
 }
+
+export function getStringArg(flagName: string, defaultValue: string): string {
+  const withEquals = process.argv.find((arg) => arg.startsWith(`--${flagName}=`));
+  if (withEquals) return withEquals.split('=')[1];
+
+  const flagIndex = process.argv.indexOf(`--${flagName}`);
+  if (flagIndex !== -1 && process.argv[flagIndex + 1]) {
+    return process.argv[flagIndex + 1];
+  }
+
+  return defaultValue;
+}
