@@ -183,7 +183,8 @@ src/
 │   └── client.ts                    # generic OpenRouter API wrapper — prompt string in, raw text out
 ├── db/
 │   ├── client.ts                    # opens jobwright.db, creates jobs table if missing (WAL mode)
-│   └── upsertJob.ts                 # upsertJob() — insert-or-update a job row by URL
+│   ├── upsertJob.ts                 # upsertJob() — insert-or-update a job row by URL
+│   └── getEligibleJobs.ts           # getEligibleJobs(minScore) — jobs with status 'scored' and score >= minScore
 ├── platforms/
 │   ├── types.ts                     # JobListing / JobPosting / JobPlatform contracts (includes apply/ApplyResult, buildSearchQuery)
 │   ├── browser.ts                    # shared Puppeteer browser launcher
@@ -198,7 +199,8 @@ src/
     ├── cliFlags.ts                   # getNumericArg(flagName, defaultValue), hasFlag(flagName), getStringArg(flagName, defaultValue)
     ├── stripCodeFences.ts            # strips markdown code fences from LLM responses
     ├── normalizePersian.ts           # Persian character-variant + zero-width-char normalization
-    └── mapApplyResultToStatus.ts     # ApplyResult status -> database status mapping
+    ├── mapApplyResultToStatus.ts     # ApplyResult status -> database status mapping
+    └── throttle.ts                   # shared inter-request delay, used by both index.ts and apply.ts
 └── __tests__/
     └── parser.test.ts
 ```
@@ -222,6 +224,9 @@ src/
 - Moved search-query construction out of `cli/index.ts` and into a new `buildSearchQuery()` method on the `JobPlatform` interface, implemented per-adapter. Keeps `index.ts` platform-agnostic ahead of adding a second platform in V4.
 - Refactored `cli/index.ts`: extracted per-job filter/scoring logic into a `processJob()` function, flag-reading into `readRunFlags()`, and the repeated inter-request delay into a `throttle()` helper. Pure internal cleanup — no behavior change.
 - Fixed a progress-counter bug: skip-branch log lines (`filtered_experience`, `filtered_location`) were hardcoded to show `/20`, correct only when a run was capped at a single page. Now reflects the actual `jobs.length` for the run.
+- Extracted the shared inter-request delay into `utils/throttle.ts`, used by both `index.ts` and `apply.ts`, replacing two separate inline `setTimeout` calls.
+- Extracted `apply.ts`'s raw SQL eligibility query into `db/getEligibleJobs.ts`, matching the existing pattern of giving each DB interaction its own named file (alongside `db/upsertJob.ts`).
+- Refactored `apply.ts`'s progress counter to use `.entries()` instead of a manually incremented counter, matching `index.ts`.
 
 ### V3
 - Added `filters/experience.ts` with a tagged-union `ExperienceRequirement` type (`range`, `atLeast`, `noRequirement`, `fieldAbsent`, `unparseable`) instead of a plain `{min, max}`, so every consumer handles each case explicitly. `noRequirement` and `fieldAbsent` are kept distinct even though they behave identically in the filter, so a future scraper breakage can be told apart from a genuine "doesn't matter" value.
