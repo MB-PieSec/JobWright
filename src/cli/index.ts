@@ -14,12 +14,7 @@ import { meetsLocationRequirement } from "../filters/location.js";
 import { upsertJob } from "../db/upsertJob.js";
 import type { JobListing } from "../platforms/types.js";
 import { type Page } from "puppeteer";
-
-const DELAY_MS = 1500;
-
-async function throttle(): Promise<void> {
-  await new Promise((r) => setTimeout(r, DELAY_MS));
-}
+import { throttle } from "../utils/throttle.js";
 
 async function loadProfile(defaultProfilePath: string): Promise<ResumeProfile> {
   if (!(await fileExists(defaultProfilePath))) {
