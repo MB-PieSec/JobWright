@@ -30,13 +30,13 @@ class JobinjaAdapter implements JobPlatform{
   
     const countText = await page.$eval(
       SELECTORS.search.totalResultCount,
-      (el) => el.textContent ?? ''
+      (el) => el.textContent ?? ""
     ).catch(() => null);
   
     const totalCount = countText ? parseTotalResultCount(countText) : null;
   
     if (totalCount === null) {
-      console.warn('Could not determine total result count — scraping page 1 only.');
+      console.warn("Could not determine total result count — scraping page 1 only.");
       return allJobs;
     }
   
@@ -62,18 +62,18 @@ class JobinjaAdapter implements JobPlatform{
     await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
 
     return page.evaluate((selectors) => {
-      const rawDesc = document.querySelector(selectors.detail.description)?.textContent ?? '';
+      const rawDesc = document.querySelector(selectors.detail.description)?.textContent ?? "";
       const description = rawDesc
-        .split('\n')
+        .split("\n")
         .map(line => line.trim())
         .filter(line => line.length > 0)
-        .join('\n') || null;
+        .join("\n") || null;
 
       const infoItems = Array.from(document.querySelectorAll(selectors.detail.infoItem)).map(li => {
         const label = li.querySelector(selectors.detail.infoItemLabel)?.textContent?.trim() ?? null;
         const value = Array.from(li.querySelectorAll(selectors.detail.infoItemTags))
-          .map(s => s.textContent?.replace(/\s+/g, ' ').trim() ?? '')
-          .join(', ');
+          .map(s => s.textContent?.replace(/\s+/g, " ").trim() ?? "")
+          .join(", ");
         return { label, value };
       });
 
@@ -83,6 +83,10 @@ class JobinjaAdapter implements JobPlatform{
   async apply(page: Page, url: string): Promise<ApplyResult> {
     await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
   
+    const expiredAlert = await page.$(SELECTORS.apply.expiredAlert);
+    if (expiredAlert !== null) {
+      return { status: "expired" };
+    }
     const alreadyApplied = await page.$(SELECTORS.apply.appliedIndicator);
     if (alreadyApplied) {
       return { status: "alreadyApplied" };
@@ -99,7 +103,7 @@ class JobinjaAdapter implements JobPlatform{
     ]);
   
     // explicitly re-fetch the original job URL, rather than trusting
-    // whatever page the click's redirect landed on
+    // whatever page the click"s redirect landed on
     await page.goto(url, { waitUntil: "networkidle2", timeout: 0 });
   
     const confirmed = await page.$(SELECTORS.apply.appliedIndicator);

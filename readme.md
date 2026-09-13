@@ -1,8 +1,11 @@
 # Jobwright
 
+
 A self-hosted, open-source CLI tool that parses your resume, matches it against job postings across multiple platforms, and auto-applies to the ones that fit — built for developers who want a real, ownable alternative to manually scrolling job boards.
 
-**Status: V3.5 — hard filters, auto-apply, SQLite application tracking, multi-page search, and configurable search keyword.**
+**Status: V4 — two job platforms (Jobinja, Jobvision), hard filters, auto-apply, SQLite application tracking, expired-posting detection, error-retry, and Telegram notifications.**
+
+> **⚠️ Use at your own risk.** Jobwright automates scraping and submitting real applications on Jobinja and Jobvision — actions that may fall outside those sites' terms of service. During development and testing, no account used with this tool has been suspended or banned, but that's a small sample over a short period, not a guarantee. This is exactly why Jobwright is self-hosted rather than a shared service: you run it with your own credentials, against your own account, and you carry that risk yourself rather than it being pooled across a userbase. If you're not comfortable with the possibility of your account being flagged, limited, or banned, don't run this against an account you can't afford to lose. Use `--live-apply` deliberately, and consider starting with a small `--max-pages`/dry-run pass before trusting it with a real batch.
 
 ## What Jobwright does so far
 
@@ -10,14 +13,29 @@ A self-hosted, open-source CLI tool that parses your resume, matches it against 
 2. Sends it to an LLM (via OpenRouter) to extract structured data — name, skills, work history, city/province, and standalone projects
 3. Computes total years of experience and a seniority level from that work history in code (not by the LLM — see note below)
 4. Validates the result against a strict schema and saves it to `profile.json`
-5. Searches Jobinja for job postings matching a configurable keyword (`--keyword`, default `backend`), paging through up to `--max-pages` pages of results (default 3) using a headless browser
+5. Searches your chosen platform (`--platform`, `jobinja` or `jobvision`) for postings matching a configurable keyword (`--keyword`, default `backend`), paging through up to `--max-pages` pages of results using a headless browser
 6. Visits each matching posting and extracts its full description and metadata (location, work type, required experience, etc.)
 7. **Applies hard filters before scoring:** an opt-in experience filter and an always-on location filter (see Hard Filters below) — jobs that fail a filter are recorded and skipped, saving an LLM call
 8. Scores each remaining job posting against your resume using an LLM, producing a 0–100 match score, a count of requirements met vs. total, a list of missing requirements, and a short reasoning summary
-9. Records every job the run encounters — filtered, scored, or skipped — to a local SQLite database (`jobwright.db`), replacing the old `jobs.json` file
-10. **New in V3:** a separate `apply.ts` entry point reads jobs that scored above threshold straight from the database and submits real applications on Jobinja, recording the outcome (`applied`, `already_applied`, or `error`) back to the same database row
+9. Records every job the run encounters — filtered, scored, or skipped — to a local SQLite database (`jobwright.db`)
+10. A separate `apply.ts` entry point reads jobs that scored above threshold straight from the database — across **all** platforms in one run, resolving the correct adapter per job — and submits real applications, recording the outcome (`applied`, `already_applied`, `expired`, or `error`) back to the same database row
+11. **New in V4:** an optional per-run summary is sent to Telegram after a live apply run (see Notifications below)
 
-Application outcome tracking beyond apply/already-applied/error (interview stages, responses, rejections) is not implemented yet.
+Application outcome tracking beyond apply/already-applied/expired/error (interview stages, responses, rejections) is not implemented yet.
+
+## Platforms
+
+Jobwright's adapter pattern (`JobPlatform` interface) means every platform implements the same contract — `buildSearchQuery`, `search`, `getJobDetails`, `apply` — but real sites don't always support the same *capabilities*. Right now the two platforms are not at parity:
+
+| | Jobinja | Jobvision |
+|---|---|---|
+| Search, pagination, scoring | ✅ | ✅ |
+| Hard filters (location) | ✅ | ✅ (remote detection via `.feature-tag` chips) |
+| Hard filters (experience) | ✅ | ❌ — no reliable labeled field; Jobvision jobs skip this filter and fail open |
+| Expired-posting detection | ✅ | ❌ — no confirmed example found yet; an expired Jobvision posting currently reports `alreadyApplied` (false positive) rather than `expired` |
+| Live apply (`--live-apply`) | ✅ | ❌ — see below |
+
+**Jobvision's apply step doesn't work yet.** Jobvision authenticates via a short-lived OIDC bearer token (24-hour expiry, issued by `account.jobvision.ir`) stored in `localStorage`, not cookies — unlike Jobinja, which uses standard long-lived session cookies. There's no `refresh_token` available to renew it automatically, and the OIDC flow has too many real-world login variants (password, OAuth, OTP) to justify automating login itself. Search, scoring, and filtering all work fully unauthenticated. Applying on Jobvision currently requires manually opening the scored job's URL and applying yourself; `apply.ts` will surface a clear `error` for any Jobvision job it can't authenticate for rather than silently failing.
 
 ## How it talks to the LLM
 
@@ -32,7 +50,7 @@ flowchart TD
     C -->|raw text| B
     B -->|validate: ResumeProfileSchema| E[profile.json]
 
-    F[Jobinja] -->|scrape via Puppeteer| G(platforms/jobinja/adapter.ts)
+    F[Jobinja / Jobvision] -->|scrape via Puppeteer| G(platforms/*/adapter.ts)
     G -->|JobPosting list| H(cli/index.ts)
 
     H -->|"info fields"| K(filters/experience.ts + filters/location.ts)
@@ -45,14 +63,17 @@ flowchart TD
     I -->|validate: JobScoreSchema| H
     H -->|upsertJob| L[(jobwright.db)]
 
-    L -->|eligible jobs| M(cli/apply.ts)
+    L -->|eligible jobs, any platform| M(cli/apply.ts)
+    M -->|resolve adapter per row| G
     M -->|submit application| G
     G -->|ApplyResult| M
     M -->|upsertJob| L
+    M -->|per-run summary| N[Telegram]
 
     style C fill:#f9f0ff,stroke:#8b5cf6
     style D fill:#eef2ff,stroke:#6366f1
     style L fill:#f0fdf4,stroke:#22c55e
+    style N fill:#eff6ff,stroke:#3b82f6
 ```
 
 `llm/client.ts` is a thin, generic wrapper — it knows nothing about resumes or job postings. It takes a finished prompt string and returns whatever text OpenRouter sends back. `resume/parser.ts` and `scoring/scorer.ts` each build their own prompt and are responsible for validating the response against their own schema. The LLM's role is strictly "read this text, extract/judge this specific thing" — never "decide what to do next." Filtering and applying are both fully deterministic — no LLM involvement.
@@ -61,25 +82,48 @@ flowchart TD
 
 Applied after scraping, before scoring, so a filtered-out job never costs an LLM call.
 
-**Experience filter** — opt-in via `--experience-tolerance`. With no flag, every job reaches scoring regardless of experience gap. When passed, compares the candidate's `totalYearsExperience` against the job's minimum-experience field with a tolerance buffer (default 1 year). Unparseable experience text always fails open — scoring is the real quality gate, so ambiguous text shouldn't cost a good-fit opportunity. This is deliberately fail-open by default: a strict skip on experience alone would contradict the principle that tech-stack match matters more than years of experience, which the LLM scorer already weighs.
+**Experience filter** — opt-in via `--experience-tolerance`, Jobinja only (see Platforms above). With no flag, every job reaches scoring regardless of experience gap. When passed, compares the candidate's `totalYearsExperience` against the job's minimum-experience field with a tolerance buffer (default 1 year). Unparseable experience text always fails open — scoring is the real quality gate, so ambiguous text shouldn't cost a good-fit opportunity. This is deliberately fail-open by default: a strict skip on experience alone would contradict the principle that tech-stack match matters more than years of experience, which the LLM scorer already weighs.
 
-**Location filter** — always active, no opt-in needed. Defaults to permissive province-level matching; `--hard-match` tightens it to exact city-level matching. Remote-tagged jobs always pass regardless of candidate location. Any case where location can't be determined (missing candidate location, missing job field) fails open.
+**Location filter** — always active, no opt-in needed, works on both platforms. Defaults to permissive province-level matching; `--hard-match` tightens it to exact city-level matching. Remote-tagged jobs always pass regardless of candidate location — on Jobinja this comes from the `نوع همکاری` field, on Jobvision from `.feature-tag` chips (there can be more than one; only the remote-indicating tag matters). Any case where location can't be determined (missing candidate location, missing job field) fails open.
 
 **`--skip-filters`** — bypasses both filters for a single run. Originally added as a debug-only convenience to unblock testing `apply.ts` against a larger job set; kept permanently rather than removed.
 
 ## Auto-apply
 
-`cli/apply.ts` is a separate entry point from `cli/index.ts`, run manually after a scoring pass. It queries the database for jobs with `status = 'scored'` at or above `--min-score`, then either logs what it *would* apply to (default, dry run) or submits real applications when `--live-apply` is passed. Every attempt — success, already-applied, or error — is written back to the same database row, so a second run naturally skips anything already handled; there's no separate "check if already applied" step.
+`cli/apply.ts` is a separate entry point from `cli/index.ts`, run manually after one or more scoring passes. It queries the database for jobs with `status = 'scored'` at or above `--min-score`, **across every platform present in the database in one run** — for each eligible job it resolves the correct adapter from the row's own `platform` column, rather than requiring you to specify which platform to apply on. It either logs what it *would* apply to (default, dry run) or submits real applications when `--live-apply` is passed. Every attempt — success, already-applied, expired, or error — is written back to the same database row, so a second run naturally skips anything already handled; there's no separate "check if already applied" step.
+
+**`--retry-errors`** — by default, a row that ends in `status = 'error'` is never retried automatically (an `expired` posting never should be retried, but a transient network error might be worth another attempt). Passing this flag additionally includes `error` rows in the eligible set for that run, alongside `scored` ones. `expired` rows are never included, retry flag or not.
+
+## Notifications
+
+After a **live** (`--live-apply`) run finishes, `apply.ts` sends a one-message summary — counts of applied / already-applied / expired / errored, plus run duration — to any configured notification channel. Dry runs never notify.
+
+Channels implement a small `NotificationChannel` interface (`notifications/types.ts`) so adding a new one (SMS, email, Discord) means writing one class and registering it — no changes needed in `apply.ts` itself:
+
+- `notifications/telegram.ts` — the only channel implemented so far. Posts to a Telegram chat via the Bot API.
+- `notifications/registry.ts` — builds the active channel list from whichever channels have their required env vars set; channels with missing config are simply skipped.
+- `notifications/notifyAll.ts` — sends to every active channel via `Promise.allSettled`; a failure in one channel (or all of them) is logged and never blocks or fails the apply run itself — notifications are deliberately decoupled from the real work.
+
+**Telegram setup:** create a bot via [@BotFather](https://t.me/BotFather), get its token, message the bot once (or add it to a channel as admin), then call `https://api.telegram.org/bot<token>/getUpdates` to read back the `chat.id` to notify. Add both to `.env`:
+
+```
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
+```
+
+If both are unset, Telegram notifications are simply not sent — no error, no crash.
 
 ## Application tracking (SQLite)
 
-Every job a run touches — filtered out, scored below threshold, scored and eligible, applied to, or errored — is recorded as one row in a local `jobwright.db` SQLite file, keyed by URL. This replaces `jobs.json` and `applyResults.json` entirely; both are gone.
+Every job a run touches — filtered out, scored below threshold, scored and eligible, applied to, expired, or errored — is recorded as one row in a local `jobwright.db` SQLite file, keyed by URL.
 
 - `src/db/client.ts` opens the database file and creates the `jobs` table if it doesn't exist (WAL mode enabled, for safety if a future daemon/dashboard mode ever reads while a run is writing).
 - `src/db/upsertJob.ts` exposes a single `upsertJob()` function — insert-or-update by URL — called from every filter/scoring point in `index.ts` and every apply outcome in `apply.ts`.
-- Each row's `status` is one of: `filtered_experience`, `filtered_location`, `scored`, `scored_low`, `applied`, `already_applied`, `error`.
-- `src/utils/mapApplyResultToStatus.ts` translates the platform adapter's `ApplyResult["status"]` (`"success" | "alreadyApplied" | "error"`) into the database's `status` values (`"applied" | "already_applied" | "error"`) — the two enums don't share wording, so this is the single place that bridges them.
+- `src/db/getEligibleJobs.ts` — `getEligibleJobs(minScore, retryErrors)` returns eligible rows (including their `platform`) across all platforms in one query.
+- Each row's `status` is one of: `filtered_experience`, `filtered_location`, `scored`, `scored_low`, `applied`, `already_applied`, `expired`, `error`.
+- `src/utils/mapApplyResultToStatus.ts` translates the platform adapter's `ApplyResult["status"]` into the database's `status` values — written with no `default` case in its `switch`, so TypeScript raises a compile error if `ApplyResult` ever grows a new variant without updating the mapping (this caught the `expired` addition automatically).
 - A row's `status` reflects only its most recent event — there's no history log of a job passing through multiple states over multiple runs, by design, to keep the schema simple until a real need for history shows up.
+- `src/db/check.js` / `src/db/reset.js` — small dev-utility scripts (plain Node, ES modules) for inspecting and manually resetting job statuses during development. Not part of the shipped pipeline, but kept in the repo since this is open source and other contributors may find them useful for their own debugging.
 
 ## Requirements
 
@@ -94,13 +138,19 @@ cd jobwright
 npm install
 ```
 
-Create a `.env` file in the project root with your OpenRouter API key:
+Create a `.env` file in the project root:
 
 ```
 openRouterAPIKEY=your_key_here
+TELEGRAM_BOT_TOKEN=your_bot_token_here
+TELEGRAM_CHAT_ID=your_chat_id_here
 ```
 
+The two `TELEGRAM_*` vars are optional — omit them to run without notifications.
+
 `jobwright.db` (plus its `-wal`/`-shm` companion files) is created automatically on first run and should not be committed — add it to `.gitignore`.
+
+**Cookies:** `src/config/cookies.json` holds session cookies Puppeteer loads before every run. Jobinja's login is cookie-based, so exporting your logged-in Jobinja session cookies into this file (as a flat array of Puppeteer-format cookie objects) is enough for `apply()` to work there. Cookies for multiple sites can coexist in the same file — each cookie object carries its own `domain`, so Puppeteer applies them correctly regardless of how many domains are mixed into the array. Jobvision does **not** use cookies for auth (see Platforms above), so this file alone isn't enough to authenticate there.
 
 ## Usage
 
@@ -110,15 +160,21 @@ npm start
 
 On first run, you'll be prompted for the path to your resume (Markdown only for now). The parsed, validated profile is saved to `profile.json` — on subsequent runs this step is skipped if `profile.json` already exists, and the existing profile is loaded and re-validated instead.
 
-The tool then opens a browser, searches Jobinja for the configured keyword (`--keyword`, default `backend`), fetching up to `--max-pages` pages of results (default `3`) — the console log tells you the total number of matching jobs found and how many pages you're covering, so you know if you're leaving results on the table. It then filters, scores each matching job against your resume, and records every job to `jobwright.db`.
+The tool then opens a browser, searches your chosen platform (`--platform`, default `jobinja`) for the configured keyword (`--keyword`, default `backend`), fetching up to `--max-pages` pages of results (default `3`) — the console log tells you the total number of matching jobs found and how many pages you're covering, so you know if you're leaving results on the table. It then filters, scores each matching job against your resume, and records every job to `jobwright.db`.
 
-To apply to eligible jobs, run the separate apply step:
+To search Jobvision instead (or in addition — run both, they land in the same database):
+
+```bash
+npx tsx src/cli/index.ts --platform=jobvision
+```
+
+To apply to eligible jobs across whichever platforms you've scraped:
 
 ```bash
 npx tsx src/cli/apply.ts --live-apply
 ```
 
-Omit `--live-apply` to dry-run and see what would be applied to without submitting anything.
+Omit `--live-apply` to dry-run and see what would be applied to without submitting anything. `apply.ts` does not take a `--platform` flag — it resolves the right adapter per job automatically.
 
 ### CLI flags
 
@@ -126,14 +182,16 @@ All flags accept `--flag=value` or `--flag value` form unless noted otherwise.
 
 | Flag | Default | Used by | Description |
 |---|---|---|---|
+| `--platform` | `jobinja` | `index.ts` | Which platform to search — `jobinja` or `jobvision`. Validated against the platform registry; an unknown value exits with a clear error rather than crashing later |
 | `--reasoning-length` | `200` | `index.ts` | Target character length for each job's scoring reasoning |
 | `--min-score` | `70` | `index.ts`, `apply.ts` | Score threshold — in `index.ts`, jobs below this are logged as "Ignored"; in `apply.ts`, only jobs at or above this are eligible to apply to |
-| `--keyword` | `backend` | `index.ts` | Search keyword sent to Jobinja. Only a single keyword is supported per run (see Known Limitations) |
-| `--max-pages` | `3` | `index.ts` | Maximum number of Jobinja search-result pages to scrape. If the site reports more results than this covers, a console log tells you how many pages/jobs you're missing |
-| `--experience-tolerance` | off (flag absent = no filtering) | `index.ts` | Opt-in experience filter. Presence alone enables it; a value (e.g. `--experience-tolerance=1`) sets the tolerance buffer in years (default `1` if no value given) |
+| `--keyword` | `backend` | `index.ts` | Search keyword sent to the chosen platform. Only a single keyword is supported per run (see Known Limitations) |
+| `--max-pages` | `3` | `index.ts` | Maximum number of search-result pages to scrape. If the site reports more results than this covers, a console log tells you how many pages/jobs you're missing |
+| `--experience-tolerance` | off (flag absent = no filtering) | `index.ts` | Opt-in experience filter, Jobinja only. Presence alone enables it; a value (e.g. `--experience-tolerance=1`) sets the tolerance buffer in years (default `1` if no value given) |
 | `--hard-match` | off (boolean) | `index.ts` | Tightens the location filter from province-level to exact city-level matching |
 | `--skip-filters` | off (boolean) | `index.ts` | Bypasses both the experience and location filters for the run |
 | `--live-apply` | off (boolean) | `apply.ts` | Submits real applications. Without it, `apply.ts` only logs what it would apply to |
+| `--retry-errors` | off (boolean) | `apply.ts` | Also retries jobs currently at `status = 'error'`, alongside normal `scored` jobs. Never retries `expired` jobs |
 
 ## Resume format
 
@@ -154,14 +212,17 @@ Scoring quality depends heavily on the model you configure in `llm/client.ts`. T
 - Extraction quality depends on the underlying LLM model. Smaller/cheaper models can occasionally misgroup or fragment work history entries — review `profile.json` after running to confirm it looks correct before relying on it downstream.
 - Scoring quality also depends on the underlying LLM model — see Model Recommendations above.
 - No PDF/DOCX support yet.
-- The search keyword is configurable (`--keyword`), but only a single keyword is supported per run — no multi-keyword search in one invocation. This is a deliberate constraint, not a gap: unioning results across multiple keyword searches would multiply LLM scoring calls (and cost) for jobs that may overlap across searches, and would need dedup logic that doesn't exist yet. Platform selection is still hardcoded to Jobinja in `src/cli/index.ts` — not yet configurable.
+- The search keyword is configurable (`--keyword`), but only a single keyword is supported per run — no multi-keyword search in one invocation. This is a deliberate constraint, not a gap: unioning results across multiple keyword searches would multiply LLM scoring calls (and cost) for jobs that may overlap across searches, and would need dedup logic that doesn't exist yet.
+- **Jobvision has no experience-filter data.** There's no reliably labeled experience field on Jobvision postings (it appears, when present at all, as an unlabeled bullet mixed into free-text "key indicator" items) — Jobvision jobs currently skip the experience filter entirely (fail open) rather than a heuristic bullet-parser built on too few real examples.
+- **Jobvision has no expired-posting detection.** No confirmed example of an expired Jobvision posting has been found yet to build a selector against. Until then, an expired Jobvision job will likely be misreported as `alreadyApplied` (a false positive) rather than `expired`, since detection there is based on the submit button's absence.
+- **Jobvision live-apply doesn't work.** See Platforms above — Jobvision's auth is a 24-hour OIDC bearer token in `localStorage` with no available refresh token, and there's no automated way to keep it fresh without also automating login (which has too many real-world variants — password, OAuth, OTP — to be worth automating right now). Search, filtering, and scoring on Jobvision are fully functional and don't require auth.
 - **Filtered-out jobs are recorded with a status but no detail beyond that status** — e.g. a `filtered_experience` row doesn't retain the raw experience string that caused the fail. Full audit detail may be added later if needed.
-- **No status history.** Each job's database row reflects only its latest state — if a job's status changes across runs (e.g. re-scored after a flag change), the previous state isn't retained, only `updated_at` changes.
-- Only Jobinja is supported as a platform so far — the adapter pattern is in place, but no second platform has been implemented yet.
-- Jobinja scraping depends on the site's current DOM structure (via `src/platforms/jobinja/selectors.ts`). If Jobinja changes their page layout, extraction may break until selectors are updated.
-- **Network routing in sanctioned/restricted regions:** OpenRouter may be unreachable without a VPN/tunnel (returns `403 Forbidden` otherwise), while scraping Jobinja works best with a direct connection. This isn't solved at the application level — Jobwright makes no attempt to switch network paths mid-run. If you're in a similar situation, the practical fix is at your VPN/network layer: configure your VPN client or server to route domestic traffic (e.g. Jobinja) directly while tunneling everything else, so both connections work transparently without the app needing to know the difference.
+- **No status history.** Each job's database row reflects only its latest state — if a job's status changes across runs (e.g. re-scored after a flag change, or retried after an error), the previous state isn't retained, only `updated_at` changes.
+- Scraping depends on each site's current DOM structure (`src/platforms/*/selectors.ts`). If either site changes its page layout, extraction may break until selectors are updated. This has already happened once within Jobvision's own markup — some postings wrap their description text differently (with or without a `dir`-attributed wrapper div) depending on the posting, not just by language, and the selector had to be widened to tolerate both shapes.
+- **Network routing in sanctioned/restricted regions:** OpenRouter may be unreachable without a VPN/tunnel (returns `403 Forbidden` otherwise), while scraping either job site works best with a direct connection. This isn't solved at the application level — Jobwright makes no attempt to switch network paths mid-run. The practical fix is at your VPN/network layer: configure your VPN client or server to route domestic traffic direct while tunneling everything else, so both connections work transparently without the app needing to know the difference.
 - No scoring result caching or fuzzy skill matching — scoring is a fresh LLM call per job every run.
-- Application outcome tracking beyond apply/already-applied/error (interview stages, responses, rejections) is not implemented yet.
+- Only Telegram is implemented as a notification channel so far, and only a per-run summary (no per-job messages).
+- Application outcome tracking beyond apply/already-applied/expired/error (interview stages, responses, rejections) is not implemented yet.
 
 ## Project structure
 
@@ -169,7 +230,7 @@ Scoring quality depends heavily on the model you configure in `llm/client.ts`. T
 src/
 ├── cli/
 │   ├── index.ts                  # entry point — orchestrates resume parsing, job search, filtering, and scoring
-│   └── apply.ts                  # reads eligible jobs from jobwright.db, applies, writes outcomes back
+│   └── apply.ts                  # reads eligible jobs from jobwright.db across all platforms, applies, writes outcomes back, sends notifications
 ├── resume/
 │   ├── schema.ts                   # ResumeProfile zod schema (includes city, province, projects)
 │   └── parser.ts                   # resume text -> LLM extraction -> validated ResumeProfile
@@ -184,14 +245,24 @@ src/
 ├── db/
 │   ├── client.ts                    # opens jobwright.db, creates jobs table if missing (WAL mode)
 │   ├── upsertJob.ts                 # upsertJob() — insert-or-update a job row by URL
-│   └── getEligibleJobs.ts           # getEligibleJobs(minScore) — jobs with status 'scored' and score >= minScore
+│   ├── getEligibleJobs.ts           # getEligibleJobs(minScore, retryErrors) — eligible jobs across all platforms
+│   ├── check.js                     # dev utility — inspect job rows by status/platform
+│   └── reset.js                     # dev utility — manually reset job rows back to 'scored'
 ├── platforms/
-│   ├── types.ts                     # JobListing / JobPosting / JobPlatform contracts (includes apply/ApplyResult, buildSearchQuery)
-│   ├── browser.ts                    # shared Puppeteer browser launcher
-│   ├── registry.ts                   # platform name -> adapter lookup
-│   └── jobinja/
-│       ├── adapter.ts                 # implements JobPlatform for Jobinja (buildSearchQuery, search, getJobDetails, apply)
-│       └── selectors.ts               # all Jobinja CSS selectors, centralized (listing, detail, apply, search), plus parseTotalResultCount
+│   ├── types.ts                     # JobListing / JobPosting / JobPlatform contracts (apply/ApplyResult incl. "expired", buildSearchQuery)
+│   ├── browser.ts                    # shared Puppeteer browser launcher, loads cookies.json
+│   ├── registry.ts                   # platform name -> adapter lookup, PlatformName union type
+│   ├── jobinja/
+│   │   ├── adapter.ts                 # implements JobPlatform for Jobinja (buildSearchQuery, search, getJobDetails, apply incl. expired detection)
+│   │   └── selectors.ts               # Jobinja CSS selectors, Persian-digit result-count parsing
+│   └── jobvision/
+│       ├── adapter.ts                 # implements JobPlatform for Jobvision (buildSearchQuery, search, getJobDetails incl. remote-tag folding, apply)
+│       └── selectors.ts               # Jobvision CSS selectors, Arabic-Indic-digit result-count parsing
+├── notifications/
+│   ├── types.ts                     # NotificationChannel interface, ApplyRunSummary shape
+│   ├── telegram.ts                  # Telegram Bot API notifier
+│   ├── registry.ts                  # builds active channel list from configured env vars
+│   └── notifyAll.ts                 # sends to all active channels via Promise.allSettled, never throws
 └── utils/
     ├── getUserInput.ts
     ├── readFileContent.ts
@@ -199,8 +270,9 @@ src/
     ├── cliFlags.ts                   # getNumericArg(flagName, defaultValue), hasFlag(flagName), getStringArg(flagName, defaultValue)
     ├── stripCodeFences.ts            # strips markdown code fences from LLM responses
     ├── normalizePersian.ts           # Persian character-variant + zero-width-char normalization
-    ├── mapApplyResultToStatus.ts     # ApplyResult status -> database status mapping
-    └── throttle.ts                   # shared inter-request delay, used by both index.ts and apply.ts
+    ├── mapApplyResultToStatus.ts     # ApplyResult status -> database status mapping (no default case, forces exhaustive handling)
+    ├── throttle.ts                   # shared inter-request delay, used by both index.ts and apply.ts
+    └── terminalLink.ts               # OSC 8 clickable terminal hyperlinks for job URLs in console logs
 └── __tests__/
     └── parser.test.ts
 ```
@@ -212,10 +284,30 @@ src/
 - ~~V2 — resume-to-job scoring engine~~ done
 - ~~V3 — hard filters, auto-apply, SQLite application tracking~~ done
 - ~~V3.5 — multi-page search, configurable search keyword, internal cleanup~~ done
-- V4 — additional platforms (Jobvision.ir) + notifications (Telegram/Discord)
-- V5 — LinkedIn/Indeed support, richer outcome tracking
+- ~~V4 — second platform (Jobvision), expired-posting detection, error retry, Telegram notifications~~ done
+- V5 — LinkedIn/Indeed support, richer outcome tracking, resolving Jobvision auth for live apply, daemon/scheduled mode
 
 ## Changelog
+
+<details>
+<summary>Click to expand full version history (V0–V4)</summary>
+
+### V4
+- **Added `JobvisionAdapter`**, proving the adapter pattern generalizes to a second real platform:
+  - `buildSearchQuery` puts the keyword in the URL path (`/jobs/keyword/{keyword}`), unlike Jobinja's query-string filter param.
+  - Result-count parsing uses **Arabic-Indic digits** (٠-٩, distinct Unicode range from Jobinja's Persian digits ۰-۹) — required its own digit-conversion function rather than reusing Jobinja's.
+  - Remote status comes from zero or more standalone `.feature-tag` chips rather than a single labeled field — folded into a synthetic `نوع همکاری`-labeled entry so the existing location filter's substring check works unchanged across both platforms.
+  - Description scraping needed two iterations: first for postings in English vs. Persian (`dir="ltr"` vs `dir="rtl"`), then for a structural inconsistency where some postings omit the `dir`-attributed wrapper entirely — the selector was widened to the outer container (`.jvt-flex-1.jvt-mr-2`) that's present in every posting seen, rather than depending on either inner wrapper shape.
+  - `apply()` detection is presence/absence-based (`button.jvt-btn-send-resume` exists → not applied; a plain disabled-looking div with no distinct class → already applied), simpler than Jobinja's redirect-chasing since the submit button's `disablebuttoninajax` attribute suggests an in-place AJAX update rather than a page redirect.
+  - No reliable labeled experience field exists on Jobvision (appears, if at all, as an unlabeled bullet mixed into free-text indicators) — Jobvision jobs skip the experience filter entirely (fails open).
+- **Investigated Jobvision authentication** and confirmed it does not work with cookie-based session loading: Jobvision uses a short-lived (24-hour) OIDC bearer token issued by a separate identity server (`account.jobvision.ir`, IdentityServer/Duende-shaped endpoints), stored in `localStorage` under `CandidateClient_v2`, not in a cookie. No `refresh_token` is present in the stored auth object despite the token's scope including `offline_access`, ruling out simple self-renewal via the token endpoint. Decided against automating the login flow itself given the range of real-world login methods (password, OAuth, OTP) — live-apply on Jobvision is a documented limitation rather than solved in this version.
+- Added `--platform` CLI flag (default `jobinja`) to `index.ts`, validated against the platform registry's actual keys with a clear error message and `process.exit(1)` on an unrecognized value, rather than an unchecked type cast that would fail confusingly later.
+- **Reworked `apply.ts` to resolve the platform adapter per job row rather than once per run.** Originally `apply.ts` also took a hardcoded (later flagged) single `platformName` for its whole run — this silently misapplied the wrong adapter to jobs from the other platform once both existed in the database. Fixed by having `getEligibleJobs` select and return each row's own `platform` column, and resolving `platformRegistry[job.platform]` inside the loop per job. `apply.ts` no longer takes a `--platform` flag at all, since one run can now correctly handle eligible jobs from every platform present in the database.
+- **Added `expired` as a first-class `ApplyResult`/DB status**, distinct from `error`. Discovered via a real Jobinja posting showing `"این آگهی منقضی شده است"` (this posting has expired) in a dedicated `.c-alert--error` element — previously this fell through to a generic, unhelpful `error` result. `JobinjaAdapter.apply()` now checks for this alert before checking for the submit button or applied indicator. `mapApplyResultToStatus`'s exhaustive `switch` (no `default` case) caught the missing case automatically at compile time when `ApplyResult` grew the new variant. Jobvision has no equivalent detection yet (see Known Limitations) — an expired Jobvision posting is currently misreported as `alreadyApplied`.
+- Added `--retry-errors` flag to `apply.ts`: widens `getEligibleJobs`'s query to include `status = 'error'` rows alongside `scored` ones when passed. `expired` rows are never retried, flag or not — this is the reason `expired` needed to be split out from `error` in the first place, rather than just improving `error`'s message.
+- **Built a small notifications system** modeled on the existing `JobPlatform` adapter pattern: a `NotificationChannel` interface (`send(summary)`), one implementation so far (`TelegramNotifier`, via the Bot API), a `registry.ts` that activates channels based on which env vars are actually configured (so adding SMS/email later is one new class + one line, no changes to `apply.ts`), and a `notifyAll()` wrapper using `Promise.allSettled` so a failing or misconfigured channel never blocks or fails a real apply run. Sends one summary message (applied/already-applied/expired/error counts + duration) at the end of a **live** run only; dry runs never notify.
+- Added `utils/terminalLink.ts` — wraps text in OSC-8 terminal hyperlink escape codes so job URLs print as clickable labels (e.g. `jobLink`) in supporting terminals (Windows Terminal, VS Code's integrated terminal), instead of long raw URLs cluttering the console log.
+- Kept `src/db/check.js` and `src/db/reset.js` (plain ES-module Node scripts written during this version's debugging) in the repo as documented dev utilities rather than deleting them post-use, given the project is open source and in active development.
 
 ### V3.5
 - Added multi-page scraping for Jobinja search results. Total result count is parsed from the page (handles Persian-numeral digits) and logged up front so you know how many jobs a `--max-pages` cap is leaving out; falls back to page-1-only with a warning if the count can't be parsed, rather than crashing.
@@ -251,7 +343,7 @@ src/
   - Added `db/client.ts`: opens `jobwright.db`, enables WAL mode, creates the `jobs` table (`url` primary key, `platform`, `title`, `status`, `score`, `reasoning`, `error_reason`, `first_seen_at`, `updated_at`) if it doesn't exist.
   - Added `db/upsertJob.ts`: a single `upsertJob()` function performing `INSERT ... ON CONFLICT(url) DO UPDATE`, called from every filter/scoring decision point in `index.ts` and every apply outcome in `apply.ts`.
   - Accepted a single-status-column design (no separate status-history log) as a deliberate tradeoff — `updated_at` shows when a row last changed, but not its prior states. Full history deferred as unnecessary for now.
-  - Added `utils/mapApplyResultToStatus.ts` to translate `ApplyResult["status"]` (`"success" | "alreadyApplied" | "error"`) into the database's `status` values (`"applied" | "already_applied" | "error"`) — the two enums use different wording, so this is the one place that bridges them. Written with no `default` case in its `switch`, so TypeScript raises a compile error if `ApplyResult`'s status type ever grows a new variant without updating the mapping.
+  - Added `utils/mapApplyResultToStatus.ts` to translate `ApplyResult["status"]` into the database's `status` values — the two enums use different wording, so this is the one place that bridges them. Written with no `default` case in its `switch`, so TypeScript raises a compile error if `ApplyResult`'s status type ever grows a new variant without updating the mapping.
   - `cli/index.ts`: `results` array and the final `jobs.json` write removed entirely — every filter/scoring decision now writes directly to the database instead.
   - `cli/apply.ts`: the `jobs.json` file read replaced by a `SELECT` query (`status = 'scored' AND score >= ?`) — filtering out anything already filtered, scored below threshold, or already applied/error'd falls out of the schema for free, with no separate "already applied" check needed. The `applyResults.json` write replaced by an `upsertJob()` call after each `adapter.apply()`.
 
@@ -285,6 +377,8 @@ src/
 - Added `stripCodeFences` to handle models that wrap JSON output in markdown code fences despite instructions not to
 - Added unit tests for `computeExperienceLevel` and `stripCodeFences`
 - Project scaffolding: TypeScript + `tsx`, Vitest, `.env`-based API key handling
+
+</details>
 
 ## License
 

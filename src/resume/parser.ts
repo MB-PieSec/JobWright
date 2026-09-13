@@ -1,6 +1,6 @@
 import { ResumeProfile } from "./schema.js";
 import { ResumeProfileSchema } from "./schema.js";
-import 'dotenv/config';
+import "dotenv/config";
 import { openRouterWrapper } from "../llm/client.js";
 import { stripCodeFences } from "../utils/stripCodeFences.js";
 
@@ -27,7 +27,7 @@ function scoreResumePrompt(contents: string): string {
     - If there is no PROJECTS section, omit this field entirely rather than inventing entries.
 
     Rules for city/province:
-    - Extract from the candidate's stated address or location on the resume, if present.
+    - Extract from the candidate"s stated address or location on the resume, if present.
     - If the resume does not state a location, omit both fields rather than guessing.
     - Return city and province in Persian script (e.g. "رشت" not "Rasht", "گیلان" not "Gilan"), using the standard spelling as it would appear on an Iranian job site — even if the resume itself states the location in English or Latin script.
 

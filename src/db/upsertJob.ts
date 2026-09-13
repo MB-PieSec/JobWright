@@ -11,6 +11,7 @@ export interface JobRecord {
     | "scored_low"
     | "scored"
     | "applied"
+    | "expired"
     | "already_applied"
     | "error";
   score?: number;

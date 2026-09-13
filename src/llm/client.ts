@@ -1,17 +1,17 @@
-import 'dotenv/config';
+import "dotenv/config";
 
 export async function openRouterWrapper(prompt: string): Promise<string>{
 
-  const rawResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-              method: 'POST',
+  const rawResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
               headers: {
-                  'Authorization': `Bearer ${process.env.openRouterAPIKEY}`,
-                  'Content-Type': 'application/json'
+                  "Authorization": `Bearer ${process.env.openRouterAPIKEY}`,
+                  "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                model: 'openai/gpt-4o-mini',
+                model: "openai/gpt-4o-mini",
                 "temperature": 0.2,
-                messages: [{ role: 'user', content: prompt }]
+                messages: [{ role: "user", content: prompt }]
               })
           });
   if (!rawResponse.ok) {

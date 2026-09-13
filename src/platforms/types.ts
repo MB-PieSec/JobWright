@@ -8,6 +8,7 @@ export interface JobListing {
 export type ApplyResult =
   | { status: "success" }
   | { status: "alreadyApplied" }
+  | { status: "expired" }
   | { status: "error"; reason: string };
 
 

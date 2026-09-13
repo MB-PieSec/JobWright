@@ -15,6 +15,7 @@ import { upsertJob } from "../db/upsertJob.js";
 import type { JobListing } from "../platforms/types.js";
 import { type Page } from "puppeteer";
 import { throttle } from "../utils/throttle.js";
+import { terminalLink } from "../utils/terminalLink.js";
 
 async function loadProfile(defaultProfilePath: string): Promise<ResumeProfile> {
   if (!(await fileExists(defaultProfilePath))) {
@@ -40,13 +41,13 @@ interface RunFlags {
 }
 
 function readRunFlags(): RunFlags {
-  const considerExperience = hasFlag('experience-tolerance');
+  const considerExperience = hasFlag("experience-tolerance");
   return {
-    skipFilters: hasFlag('skip-filters'),
-    reasoningMaxLength: getNumericArg('reasoning-length', 200),
-    minScore: getNumericArg('min-score', 70),
-    hardMatch: hasFlag('hard-match'),
-    experienceTolerance: considerExperience ? getNumericArg('experience-tolerance', 1) : 0,
+    skipFilters: hasFlag("skip-filters"),
+    reasoningMaxLength: getNumericArg("reasoning-length", 200),
+    minScore: getNumericArg("min-score", 70),
+    hardMatch: hasFlag("hard-match"),
+    experienceTolerance: considerExperience ? getNumericArg("experience-tolerance", 1) : 0,
   };
 }
 
@@ -62,7 +63,7 @@ async function processJob(
   const { description, infoItems } = await adapter.getJobDetails(page, job.url);
 
   if (description === null) {
-    console.log(`${job.title} - skipped (no description) ${progressLabel}`);
+    console.log(`${job.title} - skipped (no description) ${progressLabel} - ${terminalLink("jobLink", job.url)}`);
     await throttle();
     return;
   }
@@ -76,7 +77,7 @@ async function processJob(
     !meetsExperienceRequirement(experienceReq, profile.totalYearsExperience, flags.experienceTolerance)
   ) {
     upsertJob({ url: job.url, platform: platformName, title: job.title, status: "filtered_experience" });
-    console.log(`${job.title} - skipped (experience: ${experienceRaw}) ${progressLabel}`);
+    console.log(`${job.title} - skipped (experience: ${experienceRaw}) ${progressLabel} - ${terminalLink("jobLink", job.url)}`);
     await throttle();
     return;
   }
@@ -89,7 +90,7 @@ async function processJob(
     !meetsLocationRequirement(jobLocationRaw, cooperationTypeRaw, profile.city, profile.province, flags.hardMatch)
   ) {
     upsertJob({ url: job.url, platform: platformName, title: job.title, status: "filtered_location" });
-    console.log(`${job.title} - skipped (location: ${jobLocationRaw}) ${progressLabel}`);
+    console.log(`${job.title} - skipped (location: ${jobLocationRaw}) ${progressLabel} - ${terminalLink("jobLink", job.url)}`);
     await throttle();
     return;
   }
@@ -106,7 +107,7 @@ async function processJob(
   });
 
   const label = jobScore.score >= flags.minScore ? `score: ${jobScore.score}` : "Ignored";
-  console.log(`${job.title} - ${label} - ${progressLabel}`);
+  console.log(`${job.title} - ${label} - ${terminalLink("jobLink", job.url)} - ${progressLabel}`);
   await throttle();
 }
 
@@ -117,12 +118,17 @@ async function main() {
   try {
     const profile = await loadProfile(defaultProfilePath);
 
-    const platformName: PlatformName = "jobinja";
+    const requestedPlatform = getStringArg("platform", "jobinja");
+    if (!(requestedPlatform in platformRegistry)){
+      console.error(`Unknown platform "${requestedPlatform}". Available: ${Object.keys(platformRegistry).join(', ')}`);
+      process.exit(1);
+    }
+    const platformName = requestedPlatform as PlatformName;
     const adapter = platformRegistry[platformName];
 
-    const keyword = getStringArg('keyword', 'backend');
+    const keyword = getStringArg("keyword", "backend"); // Default (fail-safe) values
     const query = adapter.buildSearchQuery(keyword);
-    const maxPages = getNumericArg('max-pages', 3);
+    const maxPages = getNumericArg("max-pages", 3);
     const jobs = await adapter.search(page, query, maxPages);
 
     const flags = readRunFlags();
