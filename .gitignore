@@ -1,8 +1,15 @@
 resume.md
 profile.json
 .env
+.env.local
 /node_modules
+/dist
 jobs.json
 jobwright.db
 jobwright.db-wal
 jobwright.db-shm
+cookies.json
+src/config/cookies.json
+coverage
+*.log
+.DS_Store

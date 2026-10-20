@@ -135,13 +135,30 @@ async function main() {
 
     for (const [index, job] of jobs.entries()) {
       const progressLabel = `${index + 1}/${jobs.length}`;
-      await processJob(page, job, adapter, platformName, profile, flags, progressLabel);
+      try {
+        await processJob(page, job, adapter, platformName, profile, flags, progressLabel);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        upsertJob({
+          url: job.url,
+          platform: platformName,
+          title: job.title,
+          status: "error",
+          errorReason: reason,
+        });
+        console.error(`${job.title} - error: ${reason} - ${progressLabel} - ${terminalLink("jobLink", job.url)}`);
+        await throttle();
+      }
     }
   } catch (err: any) {
     console.error(err.message);
+    process.exitCode = 1;
   } finally {
     await browser.close();
   }
 }
 
-main();
+main().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exitCode = 1;
+});

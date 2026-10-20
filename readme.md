@@ -90,7 +90,7 @@ Applied after scraping, before scoring, so a filtered-out job never costs an LLM
 
 ## Auto-apply
 
-`cli/apply.ts` is a separate entry point from `cli/index.ts`, run manually after one or more scoring passes. It queries the database for jobs with `status = 'scored'` at or above `--min-score`, **across every platform present in the database in one run** — for each eligible job it resolves the correct adapter from the row's own `platform` column, rather than requiring you to specify which platform to apply on. It either logs what it *would* apply to (default, dry run) or submits real applications when `--live-apply` is passed. Every attempt — success, already-applied, expired, or error — is written back to the same database row, so a second run naturally skips anything already handled; there's no separate "check if already applied" step.
+`cli/apply.ts` is a separate entry point from `cli/index.ts`, run manually after one or more scoring passes. It queries the database for jobs with `status = 'scored'` at or above `--min-score`, **across every platform present in the database in one run** — for each eligible job it resolves the correct adapter from the row's own `platform` column, rather than requiring you to specify which platform to apply on. It either logs what it *would* apply to (default, dry run) or submits real applications when `--live-apply` is passed. Every attempt — success, already-applied, expired, or error — is written back to the same database row, so a second run naturally skips anything already handled; there's no separate "check if already applied" step. A failure on one job (network error, adapter crash, unknown platform) is recorded as `error` and the run continues with the next job rather than aborting the whole batch. `--max-applies` caps the number of applications in a single run.
 
 **`--retry-errors`** — by default, a row that ends in `status = 'error'` is never retried automatically (an `expired` posting never should be retried, but a transient network error might be worth another attempt). Passing this flag additionally includes `error` rows in the eligible set for that run, alongside `scored` ones. `expired` rows are never included, retry flag or not.
 
@@ -138,19 +138,30 @@ cd jobwright
 npm install
 ```
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (or copy `.env.example`):
+
+```bash
+cp .env.example .env
+```
 
 ```
 openRouterAPIKEY=your_key_here
+
+# Optional
+OPENROUTER_MODEL=openai/gpt-4o-mini
+JOBWRIGHT_COOKIES_PATH=./cookies.json
+JOBWRIGHT_DB_PATH=./jobwright.db
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 TELEGRAM_CHAT_ID=your_chat_id_here
 ```
 
-The two `TELEGRAM_*` vars are optional — omit them to run without notifications.
+Only `openRouterAPIKEY` is required. `TELEGRAM_*` is optional — omit it to run without notifications. `OPENROUTER_MODEL` defaults to `openai/gpt-4o-mini`.
 
-`jobwright.db` (plus its `-wal`/`-shm` companion files) is created automatically on first run and should not be committed — add it to `.gitignore`.
+`jobwright.db` (plus its `-wal`/`-shm` companion files) is created automatically on first run and is already gitignored.
 
-**Cookies:** `src/config/cookies.json` holds session cookies Puppeteer loads before every run. Jobinja's login is cookie-based, so exporting your logged-in Jobinja session cookies into this file (as a flat array of Puppeteer-format cookie objects) is enough for `apply()` to work there. Cookies for multiple sites can coexist in the same file — each cookie object carries its own `domain`, so Puppeteer applies them correctly regardless of how many domains are mixed into the array. Jobvision does **not** use cookies for auth (see Platforms above), so this file alone isn't enough to authenticate there.
+**Cookies:** `cookies.json` in the project root holds session cookies Puppeteer loads before every run. Jobinja's login is cookie-based, so exporting your logged-in Jobinja session cookies into this file (as a flat array of Puppeteer-format cookie objects) is enough for `apply()` to work there. Cookies for multiple sites can coexist in the same file — each cookie object carries its own `domain`, so Puppeteer applies them correctly regardless of how many domains are mixed into the array. Jobvision does **not** use cookies for auth (see Platforms above), so this file alone isn't enough to authenticate there.
+
+> **These cookies are live credentials.** `cookies.json` is gitignored on purpose — never commit it, and never paste its contents into an issue or chat. If it ever lands in git (or gets shared), log out of the affected account to invalidate the session, then rotate the file. Set `JOBWRIGHT_COOKIES_PATH` if you want to keep it somewhere outside the repo. Upgrading from an older version? Move `src/config/cookies.json` to `./cookies.json` — that path is no longer read.
 
 ## Usage
 
@@ -192,6 +203,7 @@ All flags accept `--flag=value` or `--flag value` form unless noted otherwise.
 | `--skip-filters` | off (boolean) | `index.ts` | Bypasses both the experience and location filters for the run |
 | `--live-apply` | off (boolean) | `apply.ts` | Submits real applications. Without it, `apply.ts` only logs what it would apply to |
 | `--retry-errors` | off (boolean) | `apply.ts` | Also retries jobs currently at `status = 'error'`, alongside normal `scored` jobs. Never retries `expired` jobs |
+| `--max-applies` | `0` (no cap) | `apply.ts` | Cap how many jobs a single run will apply to, e.g. `--max-applies=10`. Cheap insurance for an irreversible action |
 
 ## Resume format
 
@@ -243,14 +255,14 @@ src/
 ├── llm/
 │   └── client.ts                    # generic OpenRouter API wrapper — prompt string in, raw text out
 ├── db/
-│   ├── client.ts                    # opens jobwright.db, creates jobs table if missing (WAL mode)
+│   ├── client.ts                    # opens jobwright.db (project root, overridable), creates jobs table if missing (WAL mode)
 │   ├── upsertJob.ts                 # upsertJob() — insert-or-update a job row by URL
 │   ├── getEligibleJobs.ts           # getEligibleJobs(minScore, retryErrors) — eligible jobs across all platforms
 │   ├── check.js                     # dev utility — inspect job rows by status/platform
 │   └── reset.js                     # dev utility — manually reset job rows back to 'scored'
 ├── platforms/
 │   ├── types.ts                     # JobListing / JobPosting / JobPlatform contracts (apply/ApplyResult incl. "expired", buildSearchQuery)
-│   ├── browser.ts                    # shared Puppeteer browser launcher, loads cookies.json
+│   ├── browser.ts                    # shared Puppeteer browser launcher, loads cookies.json from the project root
 │   ├── registry.ts                   # platform name -> adapter lookup, PlatformName union type
 │   ├── jobinja/
 │   │   ├── adapter.ts                 # implements JobPlatform for Jobinja (buildSearchQuery, search, getJobDetails, apply incl. expired detection)
@@ -382,4 +394,4 @@ src/
 
 ## License
 
-Not yet decided.
+MIT — see [LICENSE](LICENSE). You're free to use, modify, and distribute this software, provided the copyright notice is kept. It comes with no warranty, which matters here: automated applying can affect your accounts and reputation, and you run it at your own risk.

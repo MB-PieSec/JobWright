@@ -1,18 +1,30 @@
 {
   "name": "jobwright",
   "version": "0.1.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Self-hosted CLI that parses your resume, scores job postings with an LLM, and auto-applies to the ones that fit.",
   "scripts": {
     "dev": "tsx watch src/cli/index.ts",
+    "dev:apply": "tsx watch src/cli/apply.ts",
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "tsx src/cli/index.ts",
+    "apply": "tsx src/cli/apply.ts",
     "test": "vitest run"
   },
-  "keywords": [],
+  "keywords": [
+    "job-search",
+    "resume",
+    "automation",
+    "puppeteer",
+    "cli",
+    "sqlite"
+  ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.2.0",

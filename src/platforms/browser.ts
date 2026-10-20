@@ -12,14 +12,26 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import fs from "fs/promises";
-async function loadCookies(page: Page, filePath = path.resolve(__dirname, "../config/cookies.json")) {
+
+// Cookies are credentials, so they deliberately live outside src/ and are
+// gitignored. Override the location with JOBWRIGHT_COOKIES_PATH if needed.
+const DEFAULT_COOKIES_PATH = path.resolve(__dirname, "../../cookies.json");
+
+async function loadCookies(
+  page: Page,
+  filePath = process.env.JOBWRIGHT_COOKIES_PATH
+    ? path.resolve(process.cwd(), process.env.JOBWRIGHT_COOKIES_PATH)
+    : DEFAULT_COOKIES_PATH
+) {
   try {
     const data = await fs.readFile(filePath, "utf8");
     const cookies = JSON.parse(data);
     await page.setCookie(...cookies);
     console.log("Cookies loaded successfully.");
-  } catch (error) {
-    console.error("No cookies file found or error loading:", error);
+  } catch {
+    console.warn(
+      `No cookies found at ${filePath}. Authenticated actions (live apply) will fail until you export your session there.`
+    );
   }
 }
 
