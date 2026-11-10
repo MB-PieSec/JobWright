@@ -6,7 +6,6 @@ export const ResumeProfileSchema = z.object({
   totalYearsExperience: z.number(),
   seniorityLevel: z.enum(["junior", "mid", "senior", "lead"]),
 
-
   skills: z.array(z.string()),
 
   workHistory: z.array(
@@ -15,8 +14,7 @@ export const ResumeProfileSchema = z.object({
       company: z.string(),
       durationMonths: z.number(),
       summary: z.string(),
-
-    })
+    }),
   ),
 
   projects: z
@@ -24,17 +22,19 @@ export const ResumeProfileSchema = z.object({
       z.object({
         title: z.string(),
         summary: z.string(),
-      })
+      }),
     )
     .optional(),
 
-  education: z.array(
-    z.object({
-      degree: z.string(),
-      institution: z.string(),
-      field: z.string().optional(),
-    })
-  ).optional(),
+  education: z
+    .array(
+      z.object({
+        degree: z.string(),
+        institution: z.string(),
+        field: z.string().optional(),
+      }),
+    )
+    .optional(),
 
   city: z.string().optional(),
   province: z.string().optional(),

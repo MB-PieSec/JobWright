@@ -21,7 +21,7 @@ async function loadCookies(
   page: Page,
   filePath = process.env.JOBWRIGHT_COOKIES_PATH
     ? path.resolve(process.cwd(), process.env.JOBWRIGHT_COOKIES_PATH)
-    : DEFAULT_COOKIES_PATH
+    : DEFAULT_COOKIES_PATH,
 ) {
   try {
     const data = await fs.readFile(filePath, "utf8");
@@ -30,16 +30,16 @@ async function loadCookies(
     console.log("Cookies loaded successfully.");
   } catch {
     console.warn(
-      `No cookies found at ${filePath}. Authenticated actions (live apply) will fail until you export your session there.`
+      `No cookies found at ${filePath}. Authenticated actions (live apply) will fail until you export your session there.`,
     );
   }
 }
 
 puppeteerExtra.use(StealthPlugin());
 
-export async function launchBrowser(){
+export async function launchBrowser() {
   const browser = await puppeteerExtra.launch({
-    headless: true,
+    headless: false,
     ignoreDefaultArgs: ["--enable-automation"],
     args: [
       "--disable-blink-features=AutomationControlled",

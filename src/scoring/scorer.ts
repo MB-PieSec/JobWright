@@ -1,10 +1,14 @@
 import { JobScoreSchema } from "./schema.js";
 import { JobScore } from "./schema.js";
 import { ResumeProfile } from "../resume/schema.js";
-import { openRouterWrapper } from "../llm/client.js";
+import { llmComplete } from "../llm/config.js";
 import { stripCodeFences } from "../utils/stripCodeFences.js";
 
-function scoreResumePrompt(resumeProfile:ResumeProfile, jobDescription: string, reasoningMaxLength: number): string {
+function scoreResumePrompt(
+  resumeProfile: ResumeProfile,
+  jobDescription: string,
+  reasoningMaxLength: number,
+): string {
   return `
     You are scoring how well a candidate's resume matches a job posting.
     
@@ -54,11 +58,18 @@ function scoreResumePrompt(resumeProfile:ResumeProfile, jobDescription: string, 
     }
   `;
 }
-export async function scoreResume(resumeProfile: ResumeProfile, jobDescription:string, reasoningMaxLength:number): Promise<JobScore>{
-  const prompt = scoreResumePrompt(resumeProfile, jobDescription, reasoningMaxLength);
-  const rawResponse = await openRouterWrapper(prompt);
+export async function scoreResume(
+  resumeProfile: ResumeProfile,
+  jobDescription: string,
+  reasoningMaxLength: number,
+): Promise<JobScore> {
+  const prompt = scoreResumePrompt(
+    resumeProfile,
+    jobDescription,
+    reasoningMaxLength,
+  );
+  const rawResponse = await llmComplete(prompt);
   const cleaned = stripCodeFences(rawResponse);
   const parsed = JSON.parse(cleaned);
   return JobScoreSchema.parse(parsed);
-  
 }

@@ -6,9 +6,13 @@ import { parseTotalResultCount as parseJobvisionCount } from "../platforms/jobvi
 describe("mapApplyResultToStatus", () => {
   it("maps every apply outcome to its database status", () => {
     expect(mapApplyResultToStatus({ status: "success" })).toBe("applied");
-    expect(mapApplyResultToStatus({ status: "alreadyApplied" })).toBe("already_applied");
+    expect(mapApplyResultToStatus({ status: "alreadyApplied" })).toBe(
+      "already_applied",
+    );
     expect(mapApplyResultToStatus({ status: "expired" })).toBe("expired");
-    expect(mapApplyResultToStatus({ status: "error", reason: "boom" })).toBe("error");
+    expect(mapApplyResultToStatus({ status: "error", reason: "boom" })).toBe(
+      "error",
+    );
   });
 });
 

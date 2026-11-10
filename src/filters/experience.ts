@@ -3,22 +3,24 @@ export type ExperienceRequirement =
   | { type: "atLeast"; min: number }
   | { type: "noRequirement" }
   | { type: "fieldAbsent" }
-  | { type: "unparseable"; raw: string }
+  | { type: "unparseable"; raw: string };
 
 const persianNumberWords: Record<string, number> = {
-  "یک": 1,
-  "دو": 2,
-  "سه": 3,
-  "چهار": 4,
-  "پنج": 5,
-  "شش": 6,
-  "هفت": 7,
-  "هشت": 8,
-  "نه": 9,
-  "ده": 10,
+  یک: 1,
+  دو: 2,
+  سه: 3,
+  چهار: 4,
+  پنج: 5,
+  شش: 6,
+  هفت: 7,
+  هشت: 8,
+  نه: 9,
+  ده: 10,
 };
 
-export function parseExperienceRange(raw: string | undefined): ExperienceRequirement {
+export function parseExperienceRange(
+  raw: string | undefined,
+): ExperienceRequirement {
   if (raw === undefined) {
     return { type: "fieldAbsent" };
   }
@@ -52,7 +54,7 @@ export function parseExperienceRange(raw: string | undefined): ExperienceRequire
 export function meetsExperienceRequirement(
   req: ExperienceRequirement,
   candidateYears: number,
-  toleranceYears: number
+  toleranceYears: number,
 ): boolean {
   switch (req.type) {
     case "noRequirement":

@@ -5,7 +5,7 @@ export function meetsLocationRequirement(
   cooperationTypeRaw: string | undefined,
   candidateCity: string | undefined,
   candidateProvince: string | undefined,
-  hardMatch: boolean
+  hardMatch: boolean,
 ): boolean {
   // remote always passes, regardless of everything else
   if (cooperationTypeRaw?.includes("دورکاری")) {

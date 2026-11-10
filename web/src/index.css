@@ -1,0 +1,316 @@
+@import "tailwindcss";
+
+/*
+ * Class-based dark mode.
+ *
+ * Tailwind v4 defaults `dark:` to `prefers-color-scheme`. This override makes
+ * every `dark:` utility respond to a `.dark` class on <html> instead, so the
+ * manual toggle can win over the OS setting. The pre-paint script in
+ * index.html sets that class before React mounts.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Raw theme values.
+ *
+ * These live outside `@theme` on purpose: they are redefined under `.dark`, and
+ * `@theme inline` below aliases them into Tailwind's color namespace so the
+ * generated utilities resolve the live value at the element, not a copied one.
+ */
+:root {
+  color-scheme: light;
+
+  --font-ui:
+    "Inter Variable", "Vazirmatn Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-code:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Surfaces */
+  --canvas: #fafafa;
+  --surface: #ffffff;
+  --surface-hover: #f4f4f5;
+  --surface-sunken: #f4f4f5;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+
+  /* Text */
+  --ink: #18181b;
+  --ink-muted: #52525b;
+  --ink-subtle: #71717a;
+
+  /* Accent — indigo → violet → rose */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef2ff;
+  --accent-text: #4338ca;
+
+  --accent-2: #7c3aed;
+  --accent-2-hover: #6d28d9;
+  --accent-2-soft: #f5f3ff;
+  --accent-2-text: #6d28d9;
+
+  --accent-3: #be185d;
+  --accent-3-hover: #9d174d;
+  --accent-3-soft: #fdf2f8;
+  --accent-3-text: #9d174d;
+
+  /* Danger */
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-text: #b91c1c;
+
+  /* Score bar tones */
+  --score-low: #dc2626;
+  --score-mid: #d97706;
+  --score-high: #16a34a;
+
+  /* Status badge palette */
+  --status-applied: #15803d;
+  --status-applied-soft: #f0fdf4;
+  --status-applied-ring: #bbf7d0;
+
+  --status-scored: #1d4ed8;
+  --status-scored-soft: #eff6ff;
+  --status-scored-ring: #bfdbfe;
+
+  --status-scored-low: #b45309;
+  --status-scored-low-soft: #fffbeb;
+  --status-scored-low-ring: #fde68a;
+
+  --status-already-applied: #0f766e;
+  --status-already-applied-soft: #f0fdfa;
+  --status-already-applied-ring: #99f6e4;
+
+  --status-seen: #3f3f46;
+  --status-seen-soft: #f4f4f5;
+  --status-seen-ring: #e4e4e7;
+
+  --status-filtered: #475569;
+  --status-filtered-soft: #f8fafc;
+  --status-filtered-ring: #e2e8f0;
+
+  --status-expired: #71717a;
+  --status-expired-soft: #fafafa;
+  --status-expired-ring: #e4e4e7;
+
+  --status-error: #b91c1c;
+  --status-error-soft: #fef2f2;
+  --status-error-ring: #fecaca;
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --canvas: #09090b;
+  --surface: #18181b;
+  --surface-hover: #27272a;
+  --surface-sunken: #0f0f11;
+  --line: #27272a;
+  --line-strong: #3f3f46;
+
+  /* Text */
+  --ink: #fafafa;
+  --ink-muted: #b4b4bb;
+  --ink-subtle: #8a8a93;
+
+  /* Accent — keep indigo-600 for white-text contrast; lighten on hover */
+  --accent: #4f46e5;
+  --accent-hover: #6366f1;
+  --accent-soft: #1e1b4b;
+  --accent-text: #a5b4fc;
+
+  --accent-2: #7c3aed;
+  --accent-2-hover: #8b5cf6;
+  --accent-2-soft: #2e1065;
+  --accent-2-text: #c4b5fd;
+
+  --accent-3: #be185d;
+  --accent-3-hover: #db2777;
+  --accent-3-soft: #500724;
+  --accent-3-text: #f9a8d4;
+
+  /* Danger */
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --danger-soft: #450a0a;
+  --danger-text: #fca5a5;
+
+  /* Score bar tones */
+  --score-low: #f87171;
+  --score-mid: #fbbf24;
+  --score-high: #4ade80;
+
+  /* Status badge palette */
+  --status-applied: #86efac;
+  --status-applied-soft: #052e16;
+  --status-applied-ring: #166534;
+
+  --status-scored: #93c5fd;
+  --status-scored-soft: #172554;
+  --status-scored-ring: #1e40af;
+
+  --status-scored-low: #fcd34d;
+  --status-scored-low-soft: #451a03;
+  --status-scored-low-ring: #92400e;
+
+  --status-already-applied: #5eead4;
+  --status-already-applied-soft: #042f2e;
+  --status-already-applied-ring: #115e59;
+
+  --status-seen: #d4d4d8;
+  --status-seen-soft: #27272a;
+  --status-seen-ring: #3f3f46;
+
+  --status-filtered: #cbd5e1;
+  --status-filtered-soft: #1e293b;
+  --status-filtered-ring: #334155;
+
+  --status-expired: #a1a1aa;
+  --status-expired-soft: #18181b;
+  --status-expired-ring: #27272a;
+
+  --status-error: #fca5a5;
+  --status-error-soft: #450a0a;
+  --status-error-ring: #991b1b;
+}
+
+/*
+ * Design tokens exposed to Tailwind.
+ *
+ * `inline` means utilities such as `bg-surface` compile to
+ * `background-color: var(--surface)` (not a snapshot of the light value), so
+ * switching `.dark` re-themes the whole app without rebuilding CSS.
+ */
+@theme inline {
+  /* Typography */
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+
+  /* Radii — rounded-lg for cards/inputs, rounded-xl for the slide-over */
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
+  /* Extra small label size used by metadata rows */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+
+  /* Surfaces */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  /* Text */
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  /* Accent */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+
+  --color-accent-2: var(--accent-2);
+  --color-accent-2-hover: var(--accent-2-hover);
+  --color-accent-2-soft: var(--accent-2-soft);
+  --color-accent-2-text: var(--accent-2-text);
+
+  --color-accent-3: var(--accent-3);
+  --color-accent-3-hover: var(--accent-3-hover);
+  --color-accent-3-soft: var(--accent-3-soft);
+  --color-accent-3-text: var(--accent-3-text);
+
+  /* Danger */
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-text: var(--danger-text);
+
+  /* Score */
+  --color-score-low: var(--score-low);
+  --color-score-mid: var(--score-mid);
+  --color-score-high: var(--score-high);
+
+  /* Status: applied */
+  --color-status-applied: var(--status-applied);
+  --color-status-applied-soft: var(--status-applied-soft);
+  --color-status-applied-ring: var(--status-applied-ring);
+
+  /* Status: scored */
+  --color-status-scored: var(--status-scored);
+  --color-status-scored-soft: var(--status-scored-soft);
+  --color-status-scored-ring: var(--status-scored-ring);
+
+  /* Status: scored_low */
+  --color-status-scored-low: var(--status-scored-low);
+  --color-status-scored-low-soft: var(--status-scored-low-soft);
+  --color-status-scored-low-ring: var(--status-scored-low-ring);
+
+  /* Status: already_applied */
+  --color-status-already-applied: var(--status-already-applied);
+  --color-status-already-applied-soft: var(--status-already-applied-soft);
+  --color-status-already-applied-ring: var(--status-already-applied-ring);
+
+  /* Status: seen */
+  --color-status-seen: var(--status-seen);
+  --color-status-seen-soft: var(--status-seen-soft);
+  --color-status-seen-ring: var(--status-seen-ring);
+
+  /* Status: filtered_* (shared muted palette) */
+  --color-status-filtered: var(--status-filtered);
+  --color-status-filtered-soft: var(--status-filtered-soft);
+  --color-status-filtered-ring: var(--status-filtered-ring);
+
+  /* Status: expired */
+  --color-status-expired: var(--status-expired);
+  --color-status-expired-soft: var(--status-expired-soft);
+  --color-status-expired-ring: var(--status-expired-ring);
+
+  /* Status: error */
+  --color-status-error: var(--status-error);
+  --color-status-error-soft: var(--status-error-soft);
+  --color-status-error-ring: var(--status-error-ring);
+}
+
+/*
+ * Persian-first font stack when the document is in RTL. Vazirmatn handles
+ * Persian glyph shaping better than Inter, while Inter still covers Latin
+ * identifiers and model names inside the same page.
+ */
+html[dir="rtl"] {
+  --font-ui:
+    "Vazirmatn Variable", "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--accent-text);
+  }
+
+  /* Firefox scrollbars; Chromium uses the default unless styled further. */
+  * {
+    scrollbar-color: var(--line-strong) transparent;
+    scrollbar-width: thin;
+  }
+}

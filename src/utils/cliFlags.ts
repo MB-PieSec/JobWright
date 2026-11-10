@@ -1,4 +1,3 @@
-
 export function getNumericArg(flagName: string, defaultValue: number): number {
   const args: string[] = process.argv.slice(2);
   const prefix = `--${flagName}=`;
@@ -22,12 +21,14 @@ export function getNumericArg(flagName: string, defaultValue: number): number {
 
 export function hasFlag(flagName: string): boolean {
   return process.argv.some(
-    (arg) => arg === `--${flagName}` || arg.startsWith(`--${flagName}=`)
+    (arg) => arg === `--${flagName}` || arg.startsWith(`--${flagName}=`),
   );
 }
 
 export function getStringArg(flagName: string, defaultValue: string): string {
-  const withEquals = process.argv.find((arg) => arg.startsWith(`--${flagName}=`));
+  const withEquals = process.argv.find((arg) =>
+    arg.startsWith(`--${flagName}=`),
+  );
   if (withEquals) return withEquals.split("=")[1];
 
   const flagIndex = process.argv.indexOf(`--${flagName}`);

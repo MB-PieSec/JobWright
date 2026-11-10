@@ -11,17 +11,16 @@ export type ApplyResult =
   | { status: "expired" }
   | { status: "error"; reason: string };
 
-
 export interface JobPosting extends JobListing {
   details: {
     description: string | null;
-    infoItems: {label: string | null, value: string}[]
-  }
+    infoItems: { label: string | null; value: string }[];
+  };
 }
 
-export interface JobPlatform{
+export interface JobPlatform {
   buildSearchQuery(keyword: string): string;
   search(page: Page, query: string, maxPages: number): Promise<JobListing[]>;
-  getJobDetails(page: Page, url: string): Promise<JobPosting["details"]>
+  getJobDetails(page: Page, url: string): Promise<JobPosting["details"]>;
   apply(page: Page, url: string): Promise<ApplyResult>;
 }

@@ -12,11 +12,11 @@ export const SELECTORS = {
   apply: {
     appliedIndicator: ".application-innerCard",
     applySubmitButton: "form.apply-form input[type='submit']",
-    expiredAlert: ".c-alert--error"
+    expiredAlert: ".c-alert--error",
   },
   search: {
-    totalResultCount: ".c-jobSearchState__numberOfResultsEcho"
-  }
+    totalResultCount: ".c-jobSearchState__numberOfResultsEcho",
+  },
 };
 
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";

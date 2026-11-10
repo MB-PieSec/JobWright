@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>JobWright</title>
+    <script>
+      // Apply the saved/system theme before first paint so the app never
+      // flashes the wrong color mode.
+      (function () {
+        try {
+          var stored = localStorage.getItem("jobwright-theme");
+          var dark =
+            stored === "dark" ||
+            (stored !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (_) {
+          /* localStorage can be unavailable in private modes. */
+        }
+      })();
+      // Apply the saved/system language before first paint so the document
+      // direction and Persian font are correct on the first frame.
+      (function () {
+        try {
+          var stored = localStorage.getItem("jobwright-lang");
+          var fa =
+            stored === "fa" ||
+            (stored !== "en" &&
+              navigator.language.toLowerCase().indexOf("fa") === 0);
+          document.documentElement.lang = fa ? "fa" : "en";
+          document.documentElement.dir = fa ? "rtl" : "ltr";
+        } catch (_) {
+          /* localStorage can be unavailable in private modes. */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -5,10 +5,14 @@
   "scripts": {
     "dev": "tsx watch src/cli/index.ts",
     "dev:apply": "tsx watch src/cli/apply.ts",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:web": "npm --prefix web run dev",
     "build": "tsc",
+    "build:web": "npm --prefix web run build",
     "typecheck": "tsc --noEmit",
     "start": "tsx src/cli/index.ts",
     "apply": "tsx src/cli/apply.ts",
+    "start:server": "tsx src/server/index.ts",
     "test": "vitest run"
   },
   "keywords": [
@@ -33,9 +37,13 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "@fastify/cors": "^11.4.1",
+    "@fastify/static": "^10.1.10",
     "better-sqlite3": "^13.0.3",
     "chalk": "^6.0.0",
     "dotenv": "^17.4.2",
+    "fastify": "^5.12.8",
+    "fastify-plugin": "^6.0.1",
     "figlet": "^1.11.4",
     "inquirer": "^14.0.2",
     "ora": "^9.4.1",

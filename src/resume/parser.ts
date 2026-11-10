@@ -1,7 +1,7 @@
 import { ResumeProfile } from "./schema.js";
 import { ResumeProfileSchema } from "./schema.js";
 import "dotenv/config";
-import { openRouterWrapper } from "../llm/client.js";
+import { llmComplete } from "../llm/config.js";
 import { stripCodeFences } from "../utils/stripCodeFences.js";
 
 function scoreResumePrompt(contents: string): string {
@@ -36,9 +36,13 @@ function scoreResumePrompt(contents: string): string {
   `;
 }
 
-
-export function computeExperienceLevel(workHistory: { durationMonths: number }[]) {
-  const totalMonths = workHistory.reduce((sum, role) => sum + role.durationMonths, 0);
+export function computeExperienceLevel(
+  workHistory: { durationMonths: number }[],
+) {
+  const totalMonths = workHistory.reduce(
+    (sum, role) => sum + role.durationMonths,
+    0,
+  );
   const totalYearsExperience = Math.round((totalMonths / 12) * 10) / 10; // one decimal
 
   let seniorityLevel: "junior" | "mid" | "senior" | "lead";
@@ -51,8 +55,8 @@ export function computeExperienceLevel(workHistory: { durationMonths: number }[]
 }
 
 export async function parseResume(contents: string): Promise<ResumeProfile> {
-  const prompt = scoreResumePrompt(contents)
-  const modelText = await openRouterWrapper(prompt);
+  const prompt = scoreResumePrompt(contents);
+  const modelText = await llmComplete(prompt);
   const cleanedJson = stripCodeFences(modelText);
   const parsedJson = JSON.parse(cleanedJson);
   const computed = computeExperienceLevel(parsedJson.workHistory);
