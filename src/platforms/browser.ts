@@ -38,8 +38,16 @@ async function loadCookies(
 puppeteerExtra.use(StealthPlugin());
 
 export async function launchBrowser() {
+  // Read lazily so importing this module never opens the database as a side
+  // effect (unit tests and the CLI both import it).
+  const { isHeadless } = await import("../settings/browserMode.js");
+  const headless = isHeadless();
+  console.log(
+    `Launching browser in ${headless ? "headless" : "debug (visible)"} mode.`,
+  );
+
   const browser = await puppeteerExtra.launch({
-    headless: false,
+    headless,
     ignoreDefaultArgs: ["--enable-automation"],
     args: [
       "--disable-blink-features=AutomationControlled",

@@ -2,6 +2,10 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { effectiveCookiesPath } from "../../cookies/import.js";
 import type { CookieImportResult, CookieSource } from "../../cookies/types.js";
+import {
+  getBrowserDebugMode,
+  setBrowserDebugMode,
+} from "../../settings/browserMode.js";
 import { getSetting, setSetting } from "../../settings/store.js";
 
 const CookieSourceSchema = z
@@ -15,6 +19,8 @@ const CookieSourceSchema = z
 const SettingsBody = z
   .object({
     cookiesSource: CookieSourceSchema.nullable().optional(),
+    /** True shows the Chromium window; false (default) runs headless. */
+    browserDebugMode: z.boolean().optional(),
   })
   .strict();
 
@@ -24,6 +30,9 @@ function currentSettings() {
       path: effectiveCookiesPath(),
       source: getSetting<CookieSource>("cookies.source"),
       lastImport: getSetting<CookieImportResult>("cookies.lastImport"),
+    },
+    browser: {
+      debugMode: getBrowserDebugMode(),
     },
   };
 }
@@ -42,6 +51,10 @@ const settingsRoutes: FastifyPluginAsync = async (app) => {
 
     if (parsed.data.cookiesSource !== undefined) {
       setSetting("cookies.source", parsed.data.cookiesSource);
+    }
+
+    if (parsed.data.browserDebugMode !== undefined) {
+      setBrowserDebugMode(parsed.data.browserDebugMode);
     }
 
     return currentSettings();

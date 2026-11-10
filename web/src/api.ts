@@ -283,11 +283,12 @@ export function fetchSettings(signal?: AbortSignal): Promise<SettingsResponse> {
 }
 
 export function saveSettings(input: {
-  cookiesSource: {
+  cookiesSource?: {
     browserId: CookieImportResult["browserId"];
     profilePath: string;
     autoImport: boolean;
   } | null;
+  browserDebugMode?: boolean;
 }): Promise<SettingsResponse> {
   return request<SettingsResponse>("/api/settings", {
     method: "PUT",

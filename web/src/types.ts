@@ -409,6 +409,10 @@ export interface SettingsResponse {
     source: CookieSource | null;
     lastImport: CookieImportResult | null;
   };
+  browser: {
+    /** True shows the Chromium window; false (default) runs headless. */
+    debugMode: boolean;
+  };
 }
 
 /* ------------------------------------------------------------------ */

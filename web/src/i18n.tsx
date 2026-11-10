@@ -485,6 +485,20 @@ const FA_TRANSLATIONS: Record<string, string> = {
     "ورود ناموفق ثبت می‌شود و اجرا با فایل کوکی موجود ادامه می‌یابد.",
   "Saving…": "در حال ذخیره…",
   "Save settings": "ذخیره تنظیمات",
+  "Debug mode": "حالت اشکال‌زدایی",
+  "Show the browser window while search and live apply runs. Slower and needs a display; off runs headless (default).":
+    "نمایش پنجره مرورگر هنگام جست‌وجو و اجرای درخواست زنده. کندتر است و به نمایشگر نیاز دارد؛ در حالت خاموش، اجرا بدون پنجره انجام می‌شود (پیش‌فرض).",
+  "Show the browser window": "نمایش پنجره مرورگر",
+  "Runs are headful and visible.":
+    "اجراها با پنجره مرورگر و قابل مشاهده هستند.",
+  "Runs are headless (default).":
+    "اجراها بدون پنجره مرورگر انجام می‌شوند (پیش‌فرض).",
+  "Applies to CLI runs too, because they share this database.":
+    "روی اجراهای CLI هم اثر دارد، چون از همین پایگاه داده استفاده می‌کنند.",
+  "Debug mode on — the browser window will be visible.":
+    "حالت اشکال‌زدایی روشن شد — پنجره مرورگر نمایش داده می‌شود.",
+  "Debug mode off — runs are headless.":
+    "حالت اشکال‌زدایی خاموش شد — اجراها بدون پنجره مرورگر انجام می‌شوند.",
   "Cookie file": "فایل کوکی",
   "Puppeteer reads this owner-only file.":
     "Puppeteer این فایل مخصوص مالک را می‌خواند.",

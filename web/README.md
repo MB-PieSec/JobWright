@@ -156,6 +156,10 @@ runs:
   database.
 - **Auto-import** refreshes cookies before each live apply run; a failed import
   is logged and the run continues with the existing file.
+- **Debug mode** shows the Chromium window during search and live apply instead
+  of running headless. Off by default; the value is stored as
+  `browser.debugMode` and applies to CLI runs too because they share the
+  database. Changing it saves immediately.
 
 Linux is the fully supported platform for Chromium decryption today; Firefox
 cookies are plaintext and work everywhere. Windows and macOS are next.

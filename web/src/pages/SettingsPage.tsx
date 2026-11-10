@@ -46,6 +46,8 @@ export function SettingsPage({ notify }: SettingsPageProps) {
     useState<BrowserId>("brave");
   const [selectedProfilePath, setSelectedProfilePath] = useState("");
   const [autoImport, setAutoImport] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
+  const [savingDebug, setSavingDebug] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +105,7 @@ export function SettingsPage({ notify }: SettingsPageProps) {
     setSelectedBrowserId(browserId);
     setSelectedProfilePath(source?.profilePath ?? profile?.path ?? "");
     setAutoImport(source?.autoImport ?? false);
+    setDebugMode(settings.browser.debugMode);
   }, [settings, browsers]);
 
   const reload = useCallback(() => {
@@ -210,6 +213,32 @@ export function SettingsPage({ notify }: SettingsPageProps) {
       );
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDebugModeChange = async (enabled: boolean) => {
+    if (savingDebug) return;
+
+    setDebugMode(enabled);
+    setSavingDebug(true);
+
+    try {
+      const saved = await saveSettings({ browserDebugMode: enabled });
+      setSettings(saved);
+      notify(
+        "success",
+        enabled
+          ? t("Debug mode on — the browser window will be visible.")
+          : t("Debug mode off — runs are headless."),
+      );
+    } catch (caught) {
+      setDebugMode(!enabled);
+      notify(
+        "error",
+        caught instanceof Error ? caught.message : String(caught),
+      );
+    } finally {
+      setSavingDebug(false);
     }
   };
 
@@ -489,6 +518,45 @@ export function SettingsPage({ notify }: SettingsPageProps) {
               >
                 {saving ? t("Saving…") : t("Save settings")}
               </Button>
+            </section>
+
+            <section className="rounded-lg border border-line bg-surface p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-ink">
+                {t("Debug mode")}
+              </h2>
+              <p className="mt-0.5 text-xs text-ink-subtle">
+                {t(
+                  "Show the browser window while search and live apply runs. Slower and needs a display; off runs headless (default).",
+                )}
+              </p>
+
+              <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-lg border border-line p-2.5 hover:bg-surface-hover motion-safe:transition-colors motion-safe:duration-150">
+                <input
+                  type="checkbox"
+                  checked={debugMode}
+                  disabled={savingDebug}
+                  onChange={(event) =>
+                    void handleDebugModeChange(event.target.checked)
+                  }
+                  className="mt-0.5 h-4 w-4 rounded accent-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium text-ink">
+                    {t("Show the browser window")}
+                  </span>
+                  <span className="mt-0.5 block text-2xs text-ink-subtle">
+                    {debugMode
+                      ? t("Runs are headful and visible.")
+                      : t("Runs are headless (default).")}
+                  </span>
+                </span>
+              </label>
+
+              <p className="mt-2 text-2xs text-ink-subtle">
+                {t(
+                  "Applies to CLI runs too, because they share this database.",
+                )}
+              </p>
             </section>
 
             <section className="rounded-lg border border-line bg-surface p-4 shadow-sm">
